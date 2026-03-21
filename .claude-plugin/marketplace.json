@@ -1,0 +1,18 @@
+{
+  "name": "claude-activity",
+  "metadata": {
+    "description": "Logs your prompts and generates a local activity dashboard",
+    "version": "0.1.0"
+  },
+  "owner": {
+    "name": "jodli"
+  },
+  "plugins": [
+    {
+      "name": "claude-activity",
+      "description": "Logs your prompts and generates a local activity dashboard — know what you worked on.",
+      "source": ".",
+      "category": "productivity"
+    }
+  ]
+}
