@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Claude Activity</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231a1b26'/><text x='6' y='23' font-family='monospace' font-size='20' font-weight='bold' fill='%237aa2f7'>></text><circle cx='24' cy='18' r='3' fill='%239ece6a' opacity='0.8'/></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #1a1b26;
+    --bg-surface: #1f2133;
+    --bg-hover: #292d42;
+    --border: #2f3347;
+    --border-light: #24283b;
+    --text: #c0caf5;
+    --text-muted: #565f89;
+    --text-dim: #737aa2;
+    --accent: #7aa2f7;
+    --accent-dim: #3d59a1;
+    --green: #9ece6a;
+    --orange: #e0af68;
+    --red: #f7768e;
+    --purple: #bb9af7;
+    --cyan: #7dcfff;
+    --teal: #73daca;
+    --peach: #ff9e64;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 24px 24px 48px;
+    max-width: 940px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* Subtle noise texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+    mix-blend-mode: soft-light;
+  }
+
+  body > * { position: relative; z-index: 1; }
+
+  /* Typography */
+  .time, .lt-ago, .count, .badge, .meta {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* ---- Header ---- */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 16px;
+    padding: 0 0 16px;
+    border-bottom: none;
+    background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(122, 162, 247, 0.07) 0%, transparent 70%);
+  }
+  .header-sep {
+    border: none;
+    border-top: 1px solid;
+    border-image: linear-gradient(to right, transparent, var(--border), transparent) 1;
+    margin-bottom: 12px;
+  }
+  header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  header h1 .caret { color: var(--accent); }
+  .header-right { display: flex; align-items: baseline; gap: 16px; }
+  .meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  /* ---- Greeting ---- */
+  .greeting {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    font-family: var(--font-sans);
+  }
+  .greeting .clock {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-right: 8px;
+  }
+  .greeting .context {
+    color: var(--text-dim);
+  }
+  .greeting .context-project {
+    color: var(--cyan);
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+
+  /* ---- View Toggle ---- */
+  .view-toggle {
+    display: flex; gap: 2px;
+    background: var(--bg-surface); border-radius: 6px; padding: 2px;
+    border: 1px solid var(--border);
+  }
+  .view-toggle button {
+    font-size: 11px; font-family: var(--font-mono);
+    padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    color: var(--text-muted); background: transparent; border: none;
+    transition: all 0.15s ease-out;
+  }
+  .view-toggle button.active { background: var(--accent-dim); color: var(--text); }
+  .view-toggle button .shortcut { font-size: 9px; opacity: 0.5; margin-left: 3px; }
+
+  /* ---- Filter Bar ---- */
+  .filter-bar {
+    position: sticky; top: 0; background: var(--bg); z-index: 20;
+    padding: 10px 0 12px; margin-bottom: 16px;
+    border-bottom: 1px solid;
+    border-image: linear-gradient(to right, transparent, var(--border-light), transparent) 1;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .search-box {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font-mono); font-size: 12px;
+    padding: 4px 10px; border-radius: 6px; outline: none; width: 180px;
+    transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+  }
+  .search-box:focus {
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.15);
+  }
+  .search-box::placeholder { color: var(--text-muted); }
+  .search-hint {
+    font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 3px; padding: 1px 5px; margin-left: -32px;
+    pointer-events: none; transition: opacity 0.15s;
+  }
+  .search-box:focus ~ .search-hint { opacity: 0; }
+
+  .filter-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+
+  .pill {
+    background: transparent;
+    border: 1px solid var(--pill-color, var(--text-muted));
+    color: var(--pill-color, var(--text-dim));
+    border-radius: 999px; padding: 3px 10px; cursor: pointer;
+    font-size: 11px; font-family: var(--font-mono);
+    transition: background 0.15s ease-out, color 0.15s ease-out, box-shadow 0.15s ease-out;
+    white-space: nowrap;
+  }
+  .pill:hover {
+    background: color-mix(in srgb, var(--pill-color, var(--text-muted)) 15%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--pill-color, var(--text-muted)) 40%, transparent);
+  }
+  .pill.active {
+    background: var(--pill-color, var(--text-muted));
+    color: var(--bg); font-weight: 500;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--pill-color, var(--text-muted)) 30%, transparent);
+  }
+  .pill .badge { font-size: 10px; opacity: 0.7; margin-left: 3px; }
+
+  /* ---- Last Touched ---- */
+  .last-touched {
+    margin-bottom: 28px; padding: 16px;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .last-touched h2 {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 12px;
+  }
+  .lt-entry {
+    display: grid; grid-template-columns: 130px 64px 1fr auto;
+    gap: 12px; padding: 5px 0; align-items: baseline;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .lt-entry:last-child { border-bottom: none; }
+  .lt-project { font-family: var(--font-mono); font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lt-ago { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: right; }
+  .lt-prompt { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .btn-resume {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 10px;
+    padding: 2px 6px; border-radius: 4px; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s ease-out; opacity: 0;
+  }
+  .lt-entry:hover .btn-resume, .entry:hover .btn-resume { opacity: 1; }
+  .btn-resume:hover { border-color: var(--accent-dim); color: var(--accent); }
+  .btn-resume.copied { border-color: var(--green); color: var(--green); }
+
+  /* ---- Timeline ---- */
+  .day-group { margin-bottom: 8px; padding-left: 20px; border-left: 2px solid var(--border); margin-left: 6px; }
+  .day-header {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+    padding: 10px 0 6px; position: relative;
+    margin-left: -20px; padding-left: 20px;
+  }
+  .day-header::before {
+    content: ''; position: absolute; left: -26px; top: 14px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent-dim); border: 2px solid var(--bg);
+  }
+  .day-header .count { font-weight: 400; color: var(--text-dim); margin-left: 6px; }
+
+  .entry {
+    display: grid; grid-template-columns: 50px 120px 1fr auto;
+    gap: 10px; padding: 4px 8px; border-radius: 6px;
+    align-items: baseline; position: relative;
+    transition: background 0.12s ease-out;
+    border-left: 2px solid transparent;
+    margin-left: -2px;
+  }
+  .entry:hover {
+    background: var(--bg-hover);
+    border-left-color: var(--accent);
+  }
+  .entry.focused {
+    background: rgba(122, 162, 247, 0.08);
+    border-left-color: var(--accent);
+    outline: none;
+  }
+  .entry::before {
+    content: ''; position: absolute; left: -24px; top: 11px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--border);
+    transition: background 0.12s ease-out;
+  }
+  .entry:hover::before, .entry.focused::before { background: var(--text-dim); }
+  .time { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+  .project { font-family: var(--font-mono); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prompt-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: default; }
+  .prompt-text.expandable { cursor: pointer; }
+  .prompt-text.expanded { white-space: pre-wrap; word-break: break-word; }
+
+  /* Action verb highlighting */
+  .verb { font-weight: 500; }
+  .verb-fix, .verb-debug, .verb-remove, .verb-delete { color: var(--red); }
+  .verb-add, .verb-build, .verb-create, .verb-write, .verb-implement { color: var(--green); }
+  .verb-refactor, .verb-move, .verb-rename, .verb-update, .verb-change, .verb-migrate { color: var(--orange); }
+  .verb-research, .verb-explain, .verb-review, .verb-analyze, .verb-check, .verb-find { color: var(--cyan); }
+  .verb-test, .verb-run, .verb-deploy, .verb-install, .verb-setup { color: var(--purple); }
+
+  .wt-tag {
+    font-size: 10px; color: var(--text-muted); font-weight: 400;
+    margin-left: 4px; opacity: 0.7;
+  }
+  .wt-tag::before { content: '~ '; }
+
+  .hidden { display: none !important; }
+
+  /* ---- Empty States ---- */
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty-state h2 { font-size: 16px; margin-bottom: 8px; color: var(--text-dim); }
+  .empty-state p { font-size: 13px; margin-bottom: 12px; }
+  .empty-state .action {
+    display: inline-block; font-size: 12px; font-family: var(--font-mono);
+    color: var(--accent); cursor: pointer; border-bottom: 1px dashed var(--accent-dim);
+    transition: color 0.15s;
+  }
+  .empty-state .action:hover { color: var(--cyan); }
+
+  /* ---- Toast ---- */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--bg-surface); border: 1px solid var(--green);
+    color: var(--green); font-family: var(--font-mono); font-size: 12px;
+    padding: 8px 16px; border-radius: 6px;
+    opacity: 0; transform: translateY(8px);
+    transition: all 0.2s ease-out; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ---- Keyboard Help Overlay ---- */
+  .kb-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.15s ease-out;
+  }
+  .kb-overlay.show { opacity: 1; pointer-events: auto; }
+  .kb-box {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px 32px; max-width: 380px; width: 90%;
+  }
+  .kb-box h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 16px;
+    color: var(--text); letter-spacing: -0.01em;
+  }
+  .kb-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 4px 0; font-size: 13px;
+  }
+  .kb-row .kb-key {
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; color: var(--text-dim);
+    min-width: 24px; text-align: center;
+  }
+  .kb-row .kb-desc { color: var(--text-dim); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 640px) {
+    .lt-entry { grid-template-columns: 100px 50px 1fr; }
+    .lt-entry .btn-resume { display: none; }
+    .entry { grid-template-columns: 44px 90px 1fr; }
+    .entry .btn-resume { display: none; }
+    .filter-bar { gap: 6px; }
+    .search-box { width: 140px; }
+    .time { white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="caret">&gt;</span> Claude Activity</h1>
+  <div class="header-right">
+    <div class="view-toggle">
+      <button data-view="today" class="active">Today<span class="shortcut">T</span></button>
+      <button data-view="week">7 Days<span class="shortcut">W</span></button>
+    </div>
+    <div class="meta" id="meta"></div>
+  </div>
+</header>
+<hr class="header-sep">
+
+<div class="greeting" id="greeting"></div>
+
+<div class="filter-bar" id="filter-bar">
+  <input type="search" class="search-box" id="search" placeholder="Search prompts...">
+  <span class="search-hint">/</span>
+  <div class="filter-sep"></div>
+  <button class="pill active" data-filter="all" style="--pill-color: var(--text-dim)">All</button>
+</div>
+
+<section class="last-touched" id="last-touched">
+  <h2>Last Touched</h2>
+</section>
+
+<main id="timeline"></main>
+
+<div class="toast" id="toast"></div>
+
+<div class="kb-overlay" id="kb-overlay">
+  <div class="kb-box">
+    <h3>Keyboard Shortcuts</h3>
+    <div class="kb-row"><span class="kb-desc">Navigate entries</span><span><span class="kb-key">j</span> <span class="kb-key">k</span></span></div>
+    <div class="kb-row"><span class="kb-desc">Search</span><span class="kb-key">/</span></div>
+    <div class="kb-row"><span class="kb-desc">Clear search & filters</span><span class="kb-key">Esc</span></div>
+    <div class="kb-row"><span class="kb-desc">Today view</span><span class="kb-key">t</span></div>
+    <div class="kb-row"><span class="kb-desc">7 Days view</span><span class="kb-key">w</span></div>
+    <div class="kb-row"><span class="kb-desc">Resume focused entry</span><span class="kb-key">r</span></div>
+    <div class="kb-row"><span class="kb-desc">Filter by project (1-9)</span><span><span class="kb-key">1</span>-<span class="kb-key">9</span></span></div>
+    <div class="kb-row"><span class="kb-desc">Show all projects</span><span class="kb-key">0</span></div>
+    <div class="kb-row"><span class="kb-desc">This help</span><span class="kb-key">?</span></div>
+  </div>
+</div>
+
+<script src="activity.js"></script>
+<script>
+(function() {
+  var COLORS = ['#7dcfff','#bb9af7','#9ece6a','#e0af68','#7aa2f7','#f7768e','#73daca','#ff9e64'];
+  var REFRESH_MS = 10000;
+  var entries = [];
+  var projectColors = {};
+  var currentView = 'today';
+  var focusedIdx = -1;
+
+  // -- Action verb detection --
+  var VERBS = {
+    fix:'fix', debug:'debug', remove:'remove', delete:'delete',
+    add:'add', build:'build', create:'create', write:'write', implement:'implement',
+    refactor:'refactor', move:'move', rename:'rename', update:'update', change:'change', migrate:'migrate',
+    research:'research', explain:'explain', review:'review', analyze:'analyze', check:'check', find:'find',
+    test:'test', run:'run', deploy:'deploy', install:'install', setup:'setup'
+  };
+
+  function highlightVerb(text) {
+    var first = text.split(/[\s:,]/)[0].toLowerCase();
+    if (VERBS[first]) {
+      return '<span class="verb verb-' + first + '">' + esc(text.slice(0, first.length)) + '</span>' + esc(text.slice(first.length));
+    }
+    return esc(text);
+  }
+
+  // -- Helpers --
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function relTime(iso) {
+    var diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 172800) return '1d ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function worktreeTag(cwd) {
+    var m = cwd.match(/\/.claude\/worktrees\/(.+)$/);
+    return m ? '<span class="wt-tag">' + esc(m[1]) + '</span>' : '';
+  }
+
+  function todayStr() { return new Date().toISOString().split('T')[0]; }
+  function yesterdayStr() {
+    var d = new Date(); d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }
+
+  function dateLabel(ds) {
+    if (ds === todayStr()) return 'Today';
+    if (ds === yesterdayStr()) return 'Yesterday';
+    return new Date(ds + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  }
+
+  function dateTag(ds) {
+    if (ds === todayStr()) return 'today';
+    if (ds === yesterdayStr()) return 'recent';
+    return 'older';
+  }
+
+  // -- Greeting --
+  function updateGreeting() {
+    var h = new Date().getHours();
+    var greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    var clockStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var el = document.getElementById('greeting');
+    if (entries.length === 0) {
+      el.innerHTML = '<span class="clock">' + clockStr + '</span> ' + greet + ' — no sessions logged yet.';
+      return;
+    }
+    var last = entries[0];
+    el.innerHTML = '<span class="clock">' + clockStr + '</span> <span class="context">' + greet +
+      ' — last in <span class="context-project">' + esc(last.project) + '</span> ' + relTime(last.ts) + '</span>';
+  }
+
+  // -- State persistence --
+  function saveState() {
+    var active = [];
+    document.querySelectorAll('.pill.active').forEach(function(p) { active.push(p.dataset.filter); });
+    sessionStorage.setItem('cf', JSON.stringify(active));
+    sessionStorage.setItem('cs', document.getElementById('search').value || '');
+    sessionStorage.setItem('cv', currentView);
+  }
+
+  function restoreState() {
+    var sv = sessionStorage.getItem('cv');
+    if (sv) currentView = sv;
+    document.querySelectorAll('.view-toggle button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.view === currentView);
+    });
+    var ss = sessionStorage.getItem('cs');
+    if (ss) document.getElementById('search').value = ss;
+    var sf = sessionStorage.getItem('cf');
+    if (sf) {
+      var filters = JSON.parse(sf);
+      document.querySelectorAll('.pill').forEach(function(p) {
+        p.classList.toggle('active', filters.indexOf(p.dataset.filter) !== -1);
+      });
+      if (!document.querySelector('.pill.active'))
+        document.querySelector('[data-filter="all"]').classList.add('active');
+    }
+  }
+
+  // -- Render --
+  function render() {
+    var projects = [];
+    var seen = {};
+    entries.forEach(function(e) { if (!seen[e.project]) { seen[e.project] = 1; projects.push(e.project); } });
+    projectColors = {};
+    projects.forEach(function(p, i) { projectColors[p] = COLORS[i % COLORS.length]; });
+
+    document.getElementById('meta').textContent =
+      projects.length + ' projects \u00b7 ' + entries.length + ' prompts';
+
+    // Greeting
+    updateGreeting();
+
+    // Project pills
+    var bar = document.getElementById('filter-bar');
+    bar.querySelectorAll('.pill:not([data-filter="all"])').forEach(function(p) { p.remove(); });
+    var counts = {};
+    entries.forEach(function(e) { counts[e.project] = (counts[e.project] || 0) + 1; });
+    projects.sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+    projects.forEach(function(proj) {
+      var btn = document.createElement('button');
+      btn.className = 'pill';
+      btn.dataset.filter = proj;
+      btn.style.setProperty('--pill-color', projectColors[proj]);
+      btn.innerHTML = esc(proj) + '<span class="badge">' + counts[proj] + '</span>';
+      btn.addEventListener('click', onPillClick);
+      bar.appendChild(btn);
+    });
+
+    // Last Touched
+    var lt = document.getElementById('last-touched');
+    lt.querySelectorAll('.lt-entry').forEach(function(e) { e.remove(); });
+    var ltSeen = {};
+    entries.forEach(function(e) {
+      if (ltSeen[e.project]) return;
+      ltSeen[e.project] = true;
+      var row = document.createElement('div');
+      row.className = 'lt-entry';
+      row.dataset.project = e.project;
+      row.innerHTML =
+        '<span class="lt-project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
+        '<span class="lt-ago">' + relTime(e.ts) + '</span>' +
+        '<span class="lt-prompt">' + highlightVerb(e.prompt) + '</span>' +
+        '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
+      lt.appendChild(row);
+    });
+
+    // Timeline
+    var timeline = document.getElementById('timeline');
+    timeline.innerHTML = '';
+
+    if (entries.length === 0) {
+      timeline.innerHTML = '<div class="empty-state"><h2>No activity yet</h2><p>Start a Claude Code session and your prompts will appear here.</p></div>';
+      return;
+    }
+
+    var byDate = {};
+    entries.forEach(function(e) {
+      var d = e.ts.split('T')[0];
+      (byDate[d] = byDate[d] || []).push(e);
+    });
+
+    var todayHasEntries = !!byDate[todayStr()];
+
+    Object.keys(byDate).sort().reverse().forEach(function(date) {
+      var group = document.createElement('div');
+      group.className = 'day-group';
+      group.dataset.date = dateTag(date);
+
+      var header = document.createElement('div');
+      header.className = 'day-header';
+      header.innerHTML = dateLabel(date) + '<span class="count">' + byDate[date].length + ' prompts</span>';
+      group.appendChild(header);
+
+      byDate[date].forEach(function(e) {
+        var time = e.ts.split('T')[1].split(':').slice(0, 2).join(':');
+        var row = document.createElement('div');
+        row.className = 'entry';
+        row.dataset.project = e.project;
+        row.dataset.session = e.session;
+        row.dataset.cwd = e.cwd;
+
+        var isLong = e.prompt.length > 120;
+        var promptHtml = isLong ? highlightVerb(e.prompt.slice(0, 120)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
+
+        row.innerHTML =
+          '<span class="time">' + time + '</span>' +
+          '<span class="project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
+          '<span class="prompt-text' + (isLong ? ' expandable' : '') + '">' + promptHtml + '</span>' +
+          '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
+
+        if (isLong) {
+          var pt = row.querySelector('.prompt-text');
+          pt.dataset.full = e.prompt;
+          pt.dataset.short = e.prompt.slice(0, 120) + '...';
+          pt.addEventListener('click', function() {
+            var expanded = this.classList.toggle('expanded');
+            this.innerHTML = expanded ? highlightVerb(this.dataset.full) : highlightVerb(this.dataset.short);
+          });
+        }
+
+        group.appendChild(row);
+      });
+
+      timeline.appendChild(group);
+    });
+
+    // Empty state for "Today" view when today has no entries
+    if (!todayHasEntries) {
+      var emptyToday = document.createElement('div');
+      emptyToday.className = 'day-group';
+      emptyToday.dataset.date = 'today';
+      emptyToday.innerHTML =
+        '<div class="day-header">Today<span class="count">0 prompts</span></div>' +
+        '<div class="empty-state">' +
+        '<p>No sessions today yet.</p>' +
+        '<span class="action" id="switch-to-week">Show last 7 days</span>' +
+        '</div>';
+      timeline.insertBefore(emptyToday, timeline.firstChild);
+      var switchBtn = document.getElementById('switch-to-week');
+      if (switchBtn) switchBtn.addEventListener('click', function() {
+        currentView = 'week';
+        document.querySelectorAll('.view-toggle button').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.view === 'week');
+        });
+        applyFilters();
+      });
+    }
+
+    restoreState();
+    applyFilters();
+  }
+
+  // -- Filtering --
+  function applyFilters() {
+    var active = [];
+    document.querySelectorAll('.pill.active').forEach(function(p) { active.push(p.dataset.filter); });
+    var showAll = active.indexOf('all') !== -1;
+    var q = (document.getElementById('search').value || '').toLowerCase();
+
+    document.querySelectorAll('.entry[data-project]').forEach(function(el) {
+      var mp = showAll || active.indexOf(el.dataset.project) !== -1;
+      var text = (el.querySelector('.prompt-text') || {}).textContent || '';
+      el.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
+    });
+
+    document.querySelectorAll('.lt-entry[data-project]').forEach(function(el) {
+      var mp = showAll || active.indexOf(el.dataset.project) !== -1;
+      var text = (el.querySelector('.lt-prompt') || {}).textContent || '';
+      el.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
+    });
+
+    document.querySelectorAll('.day-group').forEach(function(g) {
+      var vis = g.querySelector('.entry:not(.hidden)') || g.querySelector('.empty-state');
+      g.classList.toggle('hidden', !vis || (currentView === 'today' && g.dataset.date !== 'today'));
+    });
+
+    saveState();
+    focusedIdx = -1;
+    clearFocus();
+  }
+
+  // -- Keyboard Navigation --
+  function getVisibleEntries() {
+    return Array.from(document.querySelectorAll('.entry:not(.hidden)'));
+  }
+
+  function clearFocus() {
+    document.querySelectorAll('.entry.focused').forEach(function(e) { e.classList.remove('focused'); });
+  }
+
+  function focusEntry(idx) {
+    var visible = getVisibleEntries();
+    if (visible.length === 0) return;
+    clearFocus();
+    focusedIdx = Math.max(0, Math.min(idx, visible.length - 1));
+    var el = visible[focusedIdx];
+    el.classList.add('focused');
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function isInputFocused() {
+    var tag = (document.activeElement || {}).tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA';
+  }
+
+  document.addEventListener('keydown', function(e) {
+    var overlay = document.getElementById('kb-overlay');
+    if (overlay.classList.contains('show')) {
+      if (e.key === 'Escape' || e.key === '?') { overlay.classList.remove('show'); e.preventDefault(); }
+      return;
+    }
+
+    if (isInputFocused()) {
+      if (e.key === 'Escape') { document.activeElement.blur(); document.getElementById('search').value = ''; applyFilters(); e.preventDefault(); }
+      return;
+    }
+
+    switch (e.key) {
+      case 'j':
+        focusEntry(focusedIdx + 1); e.preventDefault(); break;
+      case 'k':
+        focusEntry(focusedIdx - 1); e.preventDefault(); break;
+      case '/':
+        document.getElementById('search').focus(); e.preventDefault(); break;
+      case 'Escape':
+        document.getElementById('search').value = '';
+        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+        document.querySelector('[data-filter="all"]').classList.add('active');
+        applyFilters(); break;
+      case 't':
+        currentView = 'today';
+        document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'today'); });
+        applyFilters(); break;
+      case 'w':
+        currentView = 'week';
+        document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'week'); });
+        applyFilters(); break;
+      case 'r':
+        var focused = document.querySelector('.entry.focused');
+        if (focused) { var btn = focused.querySelector('.btn-resume'); if (btn) btn.click(); }
+        break;
+      case '?':
+        overlay.classList.add('show'); e.preventDefault(); break;
+      case '0':
+        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+        document.querySelector('[data-filter="all"]').classList.add('active');
+        applyFilters(); break;
+      default:
+        if (e.key >= '1' && e.key <= '9') {
+          var pills = document.querySelectorAll('.pill:not([data-filter="all"])');
+          var idx = parseInt(e.key) - 1;
+          if (idx < pills.length) {
+            document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+            pills[idx].classList.add('active');
+            applyFilters();
+          }
+        }
+    }
+  });
+
+  // -- Events --
+  function onPillClick() {
+    if (this.dataset.filter === 'all') {
+      document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+    } else {
+      document.querySelector('[data-filter="all"]').classList.remove('active');
+      this.classList.toggle('active');
+      if (!document.querySelector('.pill.active'))
+        document.querySelector('[data-filter="all"]').classList.add('active');
+    }
+    applyFilters();
+  }
+
+  document.querySelector('[data-filter="all"]').addEventListener('click', onPillClick);
+  document.getElementById('search').addEventListener('input', applyFilters);
+
+  document.querySelectorAll('.view-toggle button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      currentView = this.dataset.view;
+      applyFilters();
+    });
+  });
+
+  // Close overlay on click outside
+  document.getElementById('kb-overlay').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('show');
+  });
+
+  // Resume buttons (delegated)
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-resume');
+    if (!btn) return;
+    e.stopPropagation();
+    var cmd = 'cd ' + btn.dataset.cwd + ' && claude --resume ' + btn.dataset.session;
+    navigator.clipboard.writeText(cmd).then(function() {
+      btn.classList.add('copied');
+      btn.textContent = 'copied!';
+      var toast = document.getElementById('toast');
+      toast.textContent = 'Copied: ' + cmd;
+      toast.classList.add('show');
+      setTimeout(function() { toast.classList.remove('show'); }, 2000);
+      setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'resume'; }, 2000);
+    });
+  });
+
+  // -- Load & Refresh --
+  function fixProject(e) {
+    var m = e.cwd.match(/^(.+)\/.claude\/worktrees\//);
+    if (m) e.project = m[1].split('/').pop();
+    return e;
+  }
+
+  function load() {
+    entries = (window.ACTIVITY_DATA || []).map(fixProject);
+    render();
+  }
+
+  function reload() {
+    var old = document.getElementById('activity-script');
+    if (old) old.remove();
+    var s = document.createElement('script');
+    s.id = 'activity-script';
+    s.src = 'activity.js?' + Date.now();
+    s.onload = load;
+    document.head.appendChild(s);
+  }
+
+  load();
+  setInterval(reload, REFRESH_MS);
+  setInterval(updateGreeting, 60000);
+})();
+</script>
+</body>
+</html>
