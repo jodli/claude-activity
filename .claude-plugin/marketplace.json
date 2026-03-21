@@ -12,6 +12,7 @@
       "name": "claude-activity",
       "description": "Logs your prompts and generates a local activity dashboard — know what you worked on.",
       "source": "./plugin",
+      "strict": false,
       "category": "productivity"
     }
   ]
