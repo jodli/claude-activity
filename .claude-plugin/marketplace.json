@@ -11,10 +11,7 @@
     {
       "name": "claude-activity",
       "description": "Logs your prompts and generates a local activity dashboard — know what you worked on.",
-      "source": {
-        "source": "url",
-        "url": "https://github.com/jodli/claude-activity.git"
-      },
+      "source": "./plugin",
       "category": "productivity"
     }
   ]

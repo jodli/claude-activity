@@ -1,0 +1,11 @@
+{
+  "name": "claude-activity",
+  "version": "0.1.0",
+  "description": "Logs your prompts and generates a local activity dashboard — know what you worked on.",
+  "author": {
+    "name": "jodli"
+  },
+  "repository": "https://github.com/jodli/claude-activity",
+  "license": "MIT",
+  "keywords": ["dashboard", "activity", "hooks", "session", "productivity"]
+}
