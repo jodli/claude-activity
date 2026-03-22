@@ -35,7 +35,8 @@ jq -n -c \
   >> "$ACTIVITY_LOG"
 
 # Regenerate activity.js (async, don't block Claude)
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-flock -n "$DATA_DIR/.dashboard-lock" "$PLUGIN_ROOT/scripts/generate-dashboard.sh" &
+export CLAUDE_PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT}"
+export CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}"
+flock -n "$DATA_DIR/.dashboard-lock" "${CLAUDE_PLUGIN_ROOT}/scripts/generate-dashboard.sh" &
 
 exit 0
