@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.1/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-22
+
+### Added
+
+- Theme switcher with 5 themes: Tokyo Night, Catppuccin Mocha, Kanagawa, Catppuccin Latte, Rose Pine Dawn
+- Hover effects on view toggle buttons
+
+### Fixed
+
+- Theme picker z-index stacking issues
+- Plugin environment variables now correctly passed to background scripts
+
 ## [0.1.0] - 2026-03-22
 
 ### Added
