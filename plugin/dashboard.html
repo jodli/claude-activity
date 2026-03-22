@@ -67,8 +67,6 @@
   /* ======== BASE STYLES ======== */
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   body {
     background: var(--bg); color: var(--text);
@@ -84,7 +82,7 @@
     mix-blend-mode: var(--noise-blend); opacity: var(--noise-opacity);
   }
 
-  body > * { position: relative; z-index: 1; }
+  body > * { position: relative; }
 
   .time, .lt-ago, .count, .badge, .meta {
     font-variant-numeric: tabular-nums lining-nums;
@@ -110,7 +108,7 @@
 
   /* ---- Theme Picker ---- */
   .theme-picker {
-    position: relative; display: inline-block;
+    position: relative; display: inline-block; z-index: 30;
   }
   .theme-btn {
     background: var(--bg-surface); border: 1px solid var(--border);
@@ -122,8 +120,8 @@
   .theme-menu {
     display: none; position: absolute; right: 0; top: 100%; margin-top: 4px;
     background: var(--bg-surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 4px; min-width: 180px; z-index: 50;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border-radius: 8px; padding: 4px; min-width: 180px; z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   }
   .theme-menu.show { display: block; }
   .theme-option {
@@ -167,7 +165,7 @@
 
   /* ---- Filter Bar ---- */
   .filter-bar {
-    position: sticky; top: 0; background: var(--bg); z-index: 20;
+    position: sticky; top: 0; background: var(--bg); z-index: 0;
     padding: 10px 0 12px; margin-bottom: 16px;
     border-bottom: 1px solid; border-image: linear-gradient(to right, transparent, var(--border-light), transparent) 1;
     display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
