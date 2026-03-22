@@ -4,7 +4,7 @@
 
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude}"
 ACTIVITY_LOG="$DATA_DIR/activity.jsonl"
-ACTIVITY_JS="$DATA_DIR/activity.js"
+ACTIVITY_JS="${CLAUDE_PLUGIN_ROOT}/activity.js"
 MAX_ENTRIES=1000
 
 [ ! -f "$ACTIVITY_LOG" ] && exit 0
