@@ -22,33 +22,19 @@ Noise is filtered out automatically: short confirmations (`ja`, `ok`, `yes`), em
 
 ## Install
 
-Add this to your `~/.claude/settings.json`:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "claude-activity": {
-      "source": {
-        "source": "github",
-        "repo": "jodli/claude-activity"
-      }
-    }
-  }
-}
-```
-
-Then enable the plugin in Claude Code:
-
-```
-claude /plugins
-```
+1. In Claude Code, run `/plugins`
+2. Select **Add Marketplace** and enter `git@github.com:jodli/claude-activity.git`
+3. Install the `claude-activity` plugin
+4. Run `/reload-plugins` to activate
 
 ## Usage
 
-Once installed, every prompt you type in Claude Code gets logged automatically. Open the dashboard:
+Once installed, every prompt you type in Claude Code gets logged automatically.
+
+Open the dashboard in your browser:
 
 ```
-open ~/.claude/dashboard.html
+~/.claude/plugins/cache/claude-activity/claude-activity/0.1.0/dashboard.html
 ```
 
 Or set it as your browser's new-tab page for a "what was I working on?" overview every time you open a tab.
