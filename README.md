@@ -34,7 +34,7 @@ Once installed, every prompt you type in Claude Code gets logged automatically.
 Open the dashboard in your browser:
 
 ```
-~/.claude/plugins/cache/claude-activity/claude-activity/0.1.0/dashboard.html
+~/.claude/plugins/data/claude-activity-claude-activity/dashboard.html
 ```
 
 Or set it as your browser's new-tab page for a "what was I working on?" overview every time you open a tab.
