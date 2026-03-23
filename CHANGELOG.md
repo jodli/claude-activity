@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.1/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-23
+
+### Added
+
+- Hide/restore projects: dismiss button (×) on Last Touched entries hides a project from Last Touched, filter pills, and timeline
+- Restore dialog to bring back hidden projects ("N hidden" link in Last Touched header)
+- Expandable prompts in Last Touched (click to expand long prompts)
+
+### Fixed
+
+- Expanded prompts in timeline no longer collapse on auto-refresh
+
 ## [0.2.0] - 2026-03-22
 
 ### Added
