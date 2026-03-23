@@ -302,20 +302,25 @@
     display: grid; grid-template-columns: 50px 120px 1fr auto;
     gap: 10px; padding: 4px 8px; border-radius: 6px;
     align-items: baseline; position: relative;
-    transition: background 0.12s ease-out;
-    border-left: 2px solid transparent; margin-left: -2px;
+    transition: background 0.12s ease-out, opacity 0.15s ease-out;
+    border-left: 2px solid var(--session-color, transparent); margin-left: -2px;
   }
-  .entry:hover { background: var(--bg-hover); border-left-color: var(--accent); }
+  .entry:hover { background: var(--bg-hover); }
   .entry.focused {
     background: color-mix(in srgb, var(--accent) 8%, transparent);
-    border-left-color: var(--accent); outline: none;
+    outline: none;
   }
   .entry::before {
     content: ''; position: absolute; left: -24px; top: 11px;
-    width: 6px; height: 6px; border-radius: 50%; background: var(--border);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--session-color, var(--border));
     transition: background 0.12s ease-out;
   }
-  .entry:hover::before, .entry.focused::before { background: var(--text-dim); }
+  .entry:hover::before, .entry.focused::before { background: var(--session-color, var(--text-dim)); }
+
+  /* Session hover-highlight */
+  .timeline-hover .entry { opacity: 0.3; transition: opacity 0.15s ease-out; }
+  .timeline-hover .entry.session-highlight { opacity: 1; background: color-mix(in srgb, var(--session-color, var(--accent)) 6%, transparent); }
   .time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
   .project { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .prompt-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: default; }
@@ -463,14 +468,30 @@
     'rose-pine-dawn':    ['#56949f','#907aa9','#286983','#ea9d34','#907aa9','#b4637a','#56949f','#d7827e']
   };
 
+  // -- Session colors (separate palette, offset from project colors) --
+  var SESSION_COLORS = {
+    'tokyo-night':       ['#f7768e','#73daca','#e0af68','#bb9af7','#7dcfff','#9ece6a','#ff9e64','#7aa2f7'],
+    'catppuccin-mocha':  ['#f38ba8','#94e2d5','#fab387','#cba6f7','#89dceb','#a6e3a1','#f9e2af','#89b4fa'],
+    'kanagawa':          ['#ff5d62','#7aa89f','#ffa066','#957fb8','#7e9cd8','#98bb6c','#e6c384','#7aa89f'],
+    'catppuccin-latte':  ['#d20f39','#179299','#fe640b','#8839ef','#04a5e5','#40a02b','#df8e1d','#1e66f5'],
+    'rose-pine-dawn':    ['#b4637a','#56949f','#ea9d34','#907aa9','#286983','#56949f','#d7827e','#907aa9']
+  };
+
   var REFRESH_MS = 10000;
   var HIDDEN_KEY = 'ca-hidden-projects';
   var entries = [];
   var projectColors = {};
+  var sessionColors = {};
   var expandedEntries = new Set();
   var currentView = 'today';
   var currentTheme = localStorage.getItem('ca-theme') || 'tokyo-night';
   var focusedIdx = -1;
+
+  function hashStr(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
 
   function getHidden() {
     try { return JSON.parse(localStorage.getItem(HIDDEN_KEY)) || []; }
@@ -631,6 +652,7 @@
 
   function render() {
     var COLORS = THEME_COLORS[currentTheme] || THEME_COLORS['tokyo-night'];
+    var S_COLORS = SESSION_COLORS[currentTheme] || SESSION_COLORS['tokyo-night'];
     var hidden = getHidden();
     var visibleEntries = entries.filter(function(e) { return hidden.indexOf(e.project) === -1; });
 
@@ -639,6 +661,11 @@
     visibleEntries.forEach(function(e) { if (!seen[e.project]) { seen[e.project] = 1; projects.push(e.project); } });
     projectColors = {};
     projects.forEach(function(p, i) { projectColors[p] = COLORS[i % COLORS.length]; });
+
+    sessionColors = {};
+    visibleEntries.forEach(function(e) {
+      if (!sessionColors[e.session]) sessionColors[e.session] = S_COLORS[hashStr(e.session) % S_COLORS.length];
+    });
 
     document.getElementById('meta').textContent =
       projects.length + ' projects \u00b7 ' + visibleEntries.length + ' prompts';
@@ -728,6 +755,7 @@
         var row = document.createElement('div');
         row.className = 'entry'; row.dataset.project = e.project;
         row.dataset.session = e.session; row.dataset.cwd = e.cwd;
+        row.style.setProperty('--session-color', sessionColors[e.session] || 'transparent');
         var entryKey = e.session + '|' + e.ts;
         var isLong = e.prompt.length > 120;
         var isExpanded = isLong && expandedEntries.has(entryKey);
@@ -893,6 +921,33 @@
       setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'resume'; }, 2000);
     });
   });
+
+  // -- Session hover-highlight --
+  var hoverTimeout;
+  document.getElementById('timeline').addEventListener('mouseenter', function(e) {
+    var entry = e.target.closest('.entry[data-session]');
+    if (!entry) return;
+    clearTimeout(hoverTimeout);
+    var sid = entry.dataset.session;
+    var timeline = document.getElementById('timeline');
+    timeline.classList.add('timeline-hover');
+    timeline.querySelectorAll('.entry[data-session]').forEach(function(el) {
+      el.classList.toggle('session-highlight', el.dataset.session === sid);
+    });
+  }, true);
+  document.getElementById('timeline').addEventListener('mouseleave', function(e) {
+    var entry = e.target.closest('.entry[data-session]');
+    if (!entry) return;
+    var timeline = document.getElementById('timeline');
+    hoverTimeout = setTimeout(function() {
+      if (!timeline.querySelector('.entry:hover')) {
+        timeline.classList.remove('timeline-hover');
+        timeline.querySelectorAll('.session-highlight').forEach(function(el) {
+          el.classList.remove('session-highlight');
+        });
+      }
+    }, 50);
+  }, true);
 
   function showToast(msg) {
     var toast = document.getElementById('toast');
