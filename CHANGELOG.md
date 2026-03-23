@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.1/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-23
+
+### Added
+
+- Session-color indicators: each session gets a unique color from a dedicated palette
+- Colored left-border stripe and timeline dots per session
+- Hover-highlight effect: hovering an entry highlights all entries of the same session and dims the rest
+
 ## [0.3.1] - 2026-03-23
 
 ### Fixed
