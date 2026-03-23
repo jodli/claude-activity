@@ -8,13 +8,17 @@ This plugin hooks into `UserPromptSubmit`, logs every meaningful prompt to a JSO
 
 ## What it looks like
 
+![Session hover-highlight showing two concurrent web-app sessions](assets/session-hover-highlight.gif)
+
 The dashboard shows:
 
-- **Last Touched** — one line per project, most recent first, with relative time ("2h ago")
+- **Last Touched** — one line per project, most recent first, with relative time ("2h ago"). Hide projects you don't need, restore them anytime.
 - **Timeline** — prompts grouped by day with timestamps and project names
+- **Session indicators** — colored dots and left-border stripes show which prompts belong to the same session. Hover any entry to highlight all prompts from that session while dimming the rest.
 - **Filter pills** — click a project to filter, or use the search box
 - **Today / 7 Days toggle** — default shows today, switch to see the week
-- **Action verb highlighting** — `fix` is red, `add` is green, `research` is blue
+- **Action verb highlighting** — `fix` is red, `add` is green, `research` is blue, `refactor` is orange
+- **5 themes** — Tokyo Night, Catppuccin Mocha, Kanagawa, Catppuccin Latte, Rose Pine Dawn
 - **Keyboard shortcuts** — `j`/`k` to navigate, `/` to search, `r` to resume, `?` for help
 - **Resume button** — copies `cd <project> && claude --resume <session>` to clipboard
 
