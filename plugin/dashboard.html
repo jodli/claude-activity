@@ -228,9 +228,7 @@
   .lt-entry:last-child { border-bottom: none; }
   .lt-project { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lt-ago { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); text-align: right; }
-  .lt-prompt { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
-  .lt-prompt.expandable { cursor: pointer; }
-  .lt-prompt.expanded { white-space: pre-wrap; word-break: break-word; }
+  .lt-prompt { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 
   .btn-resume {
     background: transparent; border: 1px solid var(--border);
@@ -330,9 +328,7 @@
   .timeline-hover .entry.session-highlight { opacity: 1; background: color-mix(in srgb, var(--session-color, var(--accent)) 6%, transparent); }
   .time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
   .project { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .prompt-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: default; }
-  .prompt-text.expandable { cursor: pointer; }
-  .prompt-text.expanded { white-space: pre-wrap; word-break: break-word; }
+  .prompt-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: pointer; }
 
   .verb { font-weight: 500; }
   .verb-fix, .verb-debug, .verb-remove, .verb-delete { color: var(--red); }
@@ -344,6 +340,30 @@
   .wt-tag { font-size: 10px; color: var(--text-muted); font-weight: 400; margin-left: 4px; opacity: 0.7; }
   .wt-tag::before { content: '~ '; }
   .hidden { display: none !important; }
+
+  /* ---- Peek Popover ---- */
+  .peek-backdrop { position: fixed; inset: 0; z-index: 40; }
+  .peek {
+    position: absolute; z-index: 50; width: 480px; max-width: calc(100vw - 32px);
+    max-height: 60vh; overflow-y: auto;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    font-size: 13px; color: var(--text); line-height: 1.5;
+  }
+  .peek-branch {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
+    margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .peek-label { font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 2px; }
+  .peek-prompt, .peek-response { white-space: pre-wrap; word-break: break-word; margin-bottom: 0; }
+  .peek-divider { border: none; border-top: 1px solid var(--border-light); margin: 10px 0; }
+  .peek-effort {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
+    text-align: center; padding: 2px 0;
+  }
+  .peek-working { color: var(--text-muted); font-style: italic; padding: 4px 0; }
+  .peek-footer { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .peek .btn-resume { opacity: 1; }
 
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
   .empty-state h2 { font-size: 16px; margin-bottom: 8px; color: var(--text-dim); }
@@ -489,7 +509,7 @@
   var entries = [];
   var projectColors = {};
   var sessionColors = {};
-  var expandedEntries = new Set();
+
   var currentView = 'today';
   var currentTheme = localStorage.getItem('ca-theme') || 'tokyo-night';
   var focusedIdx = -1;
@@ -594,6 +614,79 @@
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     if (diff < 172800) return '1d ago';
     return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function formatDuration(s) {
+    if (s == null || s <= 0) return null;
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  }
+
+  var peekEntry = null;
+
+  function closePeek() {
+    var old = document.querySelector('.peek');
+    if (old) old.remove();
+    var bd = document.querySelector('.peek-backdrop');
+    if (bd) bd.remove();
+    peekEntry = null;
+  }
+
+  function openPeek(e, anchor) {
+    closePeek();
+    peekEntry = e;
+
+    // Build popover content
+    var html = '';
+    if (e.branch && e.branch !== 'main') {
+      html += '<div class="peek-branch">' + esc(e.branch) + '</div>';
+    }
+    html += '<div class="peek-label">You:</div>';
+    html += '<div class="peek-prompt">' + highlightVerb(e.prompt) + '</div>';
+    html += '<hr class="peek-divider">';
+
+    if (e.response === null) {
+      html += '<div class="peek-working">Claude is working\u2026</div>';
+    } else if (e.response === '') {
+      // migrated — no response or effort
+    } else {
+      if (e.effort_total != null || e.duration_s != null) {
+        var parts = [];
+        if (e.effort_total != null) parts.push(e.effort_total + ' tool calls');
+        var dur = formatDuration(e.duration_s);
+        if (dur) parts.push(dur);
+        if (parts.length) html += '<div class="peek-effort">' + parts.join(' \u00b7 ') + '</div><hr class="peek-divider">';
+      }
+      html += '<div class="peek-label">Claude:</div>';
+      html += '<div class="peek-response">' + esc(e.response) + '</div>';
+    }
+
+    html += '<hr class="peek-divider">';
+    html += '<div class="peek-footer"><button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button></div>';
+
+    // Create backdrop
+    var bd = document.createElement('div');
+    bd.className = 'peek-backdrop';
+    bd.addEventListener('click', closePeek);
+    document.body.appendChild(bd);
+
+    // Create popover
+    var pop = document.createElement('div');
+    pop.className = 'peek';
+    pop.innerHTML = html;
+    document.body.appendChild(pop);
+
+    // Position below anchor, flip above if near viewport bottom
+    var rect = anchor.getBoundingClientRect();
+    var top = rect.bottom + window.scrollY + 6;
+    var left = rect.left + window.scrollX;
+    if (rect.bottom + pop.offsetHeight + 16 > window.innerHeight) {
+      top = rect.top + window.scrollY - pop.offsetHeight - 6;
+    }
+    left = Math.max(8, Math.min(left, window.innerWidth - pop.offsetWidth - 8));
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
   }
 
   function worktreeTag(cwd) {
@@ -712,26 +805,14 @@
       ltSeen[e.project] = true;
       var row = document.createElement('div');
       row.className = 'lt-entry'; row.dataset.project = e.project;
-      var ltKey = e.session + '|' + e.ts;
-      var ltIsLong = e.prompt.length > 80;
-      var ltExpanded = ltIsLong && expandedEntries.has(ltKey);
-      var ltPromptHtml = ltIsLong && !ltExpanded ? highlightVerb(e.prompt.slice(0, 80)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
+      row._entry = e;
+      var ltPromptHtml = e.prompt.length > 80 ? highlightVerb(e.prompt.slice(0, 80)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
       row.innerHTML =
         '<span class="lt-project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
         '<span class="lt-ago' + (e.response === null ? ' in-progress' : '') + '">' + (e.response === null ? 'now' : relTime(e.ts)) + '</span>' +
-        '<span class="lt-prompt' + (ltIsLong ? ' expandable' : '') + (ltExpanded ? ' expanded' : '') + '">' + ltPromptHtml + '</span>' +
+        '<span class="lt-prompt" style="cursor:pointer">' + ltPromptHtml + '</span>' +
         '<button class="btn-dismiss" data-project="' + esc(e.project) + '" title="Hide project">&times;</button>' +
         '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
-      if (ltIsLong) {
-        var ltp = row.querySelector('.lt-prompt');
-        ltp.dataset.full = e.prompt; ltp.dataset.short = e.prompt.slice(0, 80) + '...';
-        ltp.dataset.key = ltKey;
-        ltp.addEventListener('click', function() {
-          var exp = this.classList.toggle('expanded');
-          this.innerHTML = exp ? highlightVerb(this.dataset.full) : highlightVerb(this.dataset.short);
-          if (exp) expandedEntries.add(this.dataset.key); else expandedEntries.delete(this.dataset.key);
-        });
-      }
       lt.appendChild(row);
     });
 
@@ -764,25 +845,13 @@
         row.className = 'entry' + (isInProgress ? ' in-progress' : ''); row.dataset.project = e.project;
         row.dataset.session = e.session; row.dataset.cwd = e.cwd;
         row.style.setProperty('--session-color', sessionColors[e.session] || 'transparent');
-        var entryKey = e.session + '|' + e.ts;
-        var isLong = e.prompt.length > 120;
-        var isExpanded = isLong && expandedEntries.has(entryKey);
-        var promptHtml = isLong && !isExpanded ? highlightVerb(e.prompt.slice(0, 120)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
+        row._entry = e;
+        var promptHtml = e.prompt.length > 120 ? highlightVerb(e.prompt.slice(0, 120)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
         row.innerHTML =
           '<span class="time">' + time + '</span>' +
           '<span class="project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
-          '<span class="prompt-text' + (isLong ? ' expandable' : '') + (isExpanded ? ' expanded' : '') + '">' + promptHtml + '</span>' +
+          '<span class="prompt-text" style="cursor:pointer">' + promptHtml + '</span>' +
           '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
-        if (isLong) {
-          var pt = row.querySelector('.prompt-text');
-          pt.dataset.full = e.prompt; pt.dataset.short = e.prompt.slice(0, 120) + '...';
-          pt.dataset.key = entryKey;
-          pt.addEventListener('click', function() {
-            var expanded = this.classList.toggle('expanded');
-            this.innerHTML = expanded ? highlightVerb(this.dataset.full) : highlightVerb(this.dataset.short);
-            if (expanded) expandedEntries.add(this.dataset.key); else expandedEntries.delete(this.dataset.key);
-          });
-        }
         group.appendChild(row);
       });
       timeline.appendChild(group);
@@ -845,7 +914,10 @@
 
   function isInputFocused() { var t = (document.activeElement || {}).tagName; return t === 'INPUT' || t === 'TEXTAREA'; }
 
+  window.addEventListener('scroll', function() { if (peekEntry) closePeek(); });
+
   document.addEventListener('keydown', function(e) {
+    if (peekEntry && e.key === 'Escape') { closePeek(); e.preventDefault(); return; }
     var restoreOverlay = document.getElementById('restore-overlay');
     if (restoreOverlay.classList.contains('show')) {
       if (e.key === 'Escape') { restoreOverlay.classList.remove('show'); e.preventDefault(); }
@@ -920,14 +992,18 @@
     var dismiss = e.target.closest('.btn-dismiss');
     if (dismiss) { e.stopPropagation(); hideProject(dismiss.dataset.project); return; }
     var btn = e.target.closest('.btn-resume');
-    if (!btn) return;
-    e.stopPropagation();
-    var cmd = 'cd ' + btn.dataset.cwd + ' && claude --resume ' + btn.dataset.session;
-    navigator.clipboard.writeText(cmd).then(function() {
-      btn.classList.add('copied'); btn.textContent = 'copied!';
-      showToast('Copied: ' + cmd);
-      setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'resume'; }, 2000);
-    });
+    if (btn) {
+      e.stopPropagation();
+      var cmd = 'cd ' + btn.dataset.cwd + ' && claude --resume ' + btn.dataset.session;
+      navigator.clipboard.writeText(cmd).then(function() {
+        btn.classList.add('copied'); btn.textContent = 'copied!';
+        showToast('Copied: ' + cmd);
+        setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'resume'; }, 2000);
+      });
+      return;
+    }
+    var row = e.target.closest('.entry, .lt-entry');
+    if (row && row._entry) { openPeek(row._entry, row); return; }
   });
 
   // -- Session hover-highlight --
@@ -948,12 +1024,11 @@
     if (!entry) return;
     var timeline = document.getElementById('timeline');
     hoverTimeout = setTimeout(function() {
-      if (!timeline.querySelector('.entry:hover')) {
-        timeline.classList.remove('timeline-hover');
-        timeline.querySelectorAll('.session-highlight').forEach(function(el) {
-          el.classList.remove('session-highlight');
-        });
-      }
+      if (peekEntry || timeline.querySelector('.entry:hover')) return;
+      timeline.classList.remove('timeline-hover');
+      timeline.querySelectorAll('.session-highlight').forEach(function(el) {
+        el.classList.remove('session-highlight');
+      });
     }, 50);
   }, true);
 
