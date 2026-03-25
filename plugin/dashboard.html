@@ -693,13 +693,14 @@
     pop.innerHTML = html;
     document.body.appendChild(pop);
 
-    // Position below anchor, flip above if near viewport bottom
+    // Position below anchor, flip above if near bottom, clamp to viewport
     var rect = anchor.getBoundingClientRect();
     var top = rect.bottom + window.scrollY + 6;
     var left = rect.left + window.scrollX;
     if (rect.bottom + pop.offsetHeight + 16 > window.innerHeight) {
       top = rect.top + window.scrollY - pop.offsetHeight - 6;
     }
+    top = Math.max(window.scrollY + 8, top);
     left = Math.max(8, Math.min(left, window.innerWidth - pop.offsetWidth - 8));
     pop.style.top = top + 'px';
     pop.style.left = left + 'px';
@@ -942,7 +943,9 @@
 
   function isInputFocused() { var t = (document.activeElement || {}).tagName; return t === 'INPUT' || t === 'TEXTAREA'; }
 
-  window.addEventListener('scroll', function() { if (peekEntry) closePeek(); });
+  window.addEventListener('scroll', function(e) {
+    if (peekEntry && (e.target === document || e.target === document.documentElement)) closePeek();
+  }, true);
 
   document.addEventListener('keydown', function(e) {
     if (peekEntry && e.key === 'Escape') { closePeek(); e.preventDefault(); return; }
