@@ -11,6 +11,17 @@
         ]
       }
     ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"Activity dashboard available \\u2014 type /claude-activity:dashboard to open it\"}'",
+            "timeout": 2000
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
