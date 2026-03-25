@@ -826,7 +826,11 @@
     timeline.innerHTML = '';
 
     if (visibleEntries.length === 0) {
-      timeline.innerHTML = '<div class="empty-state"><h2>No activity yet</h2><p>Start a Claude Code session and your prompts will appear here.</p>' +
+      timeline.innerHTML = '<div class="empty-state">' +
+        '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">&gt;_</div>' +
+        '<h2>Your activity timeline will appear here</h2>' +
+        '<p>Prompts and responses are logged as you work across projects.</p>' +
+        '<p style="font-size:12px;color:var(--text-muted)">Reopen anytime with <code style="font-family:\'JetBrains Mono\',monospace;background:var(--bg-hover);padding:1px 5px;border-radius:3px">/claude-activity:dashboard</code></p>' +
         (hidden.length > 0 ? '<span class="action" onclick="document.getElementById(\'restore-overlay\').classList.add(\'show\')">' + hidden.length + ' projects hidden — restore?</span>' : '') +
         '</div>';
       return;
