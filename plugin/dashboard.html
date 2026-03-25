@@ -329,6 +329,11 @@
   @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   @media (prefers-reduced-motion: reduce) { .entry.in-progress::before { animation: none; } }
 
+  /* Stale in-progress (>10 min, Stop hook likely missed) */
+  .entry.stale::before { background: var(--orange); }
+  .entry.stale .time { color: var(--text-muted); }
+  .lt-ago.stale { color: var(--text-muted); }
+
   /* Session hover-highlight */
   .timeline-hover .entry { opacity: 0.3; transition: opacity 0.15s ease-out; }
   .timeline-hover .entry.session-highlight { opacity: 1; background: color-mix(in srgb, var(--session-color, var(--accent)) 6%, transparent); }
@@ -511,6 +516,7 @@
   };
 
   var REFRESH_MS = 10000;
+  var STALE_MS = 600000; // 10 minutes
   var HIDDEN_KEY = 'ca-hidden-projects';
   var entries = [];
   var projectColors = {};
@@ -652,7 +658,9 @@
     html += '<div class="peek-prompt">' + highlightVerb(e.prompt) + '</div>';
     html += '<hr class="peek-divider">';
 
-    if (e.response === null) {
+    if (e.response === null && (Date.now() - new Date(e.ts).getTime()) > STALE_MS) {
+      html += '<div class="peek-working">Status unknown \u2014 session may have ended</div>';
+    } else if (e.response === null) {
       html += '<div class="peek-working">Claude is working\u2026</div>';
     } else if (e.response === '') {
       // migrated — no response or effort
@@ -815,7 +823,13 @@
       var ltPromptHtml = e.prompt.length > 80 ? highlightVerb(e.prompt.slice(0, 80)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
       row.innerHTML =
         '<span class="lt-project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
-        '<span class="lt-ago' + (e.response === null ? ' in-progress' : '') + '">' + (e.response === null ? 'now' : relTime(e.ts)) + '</span>' +
+        (function() {
+          var ip = e.response === null;
+          var st = ip && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
+          var cls = st ? ' stale' : ip ? ' in-progress' : '';
+          var txt = ip && !st ? 'now' : relTime(e.ts);
+          return '<span class="lt-ago' + cls + '">' + txt + '</span>';
+        })() +
         '<span class="lt-prompt" style="cursor:pointer">' + ltPromptHtml + '</span>' +
         '<button class="btn-dismiss" data-project="' + esc(e.project) + '" title="Hide project">&times;</button>' +
         '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
@@ -850,9 +864,10 @@
 
       byDate[date].forEach(function(e) {
         var isInProgress = e.response === null;
-        var time = isInProgress ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
+        var isStale = isInProgress && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
+        var time = isInProgress && !isStale ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
         var row = document.createElement('div');
-        row.className = 'entry' + (isInProgress ? ' in-progress' : ''); row.dataset.project = e.project;
+        row.className = 'entry' + (isStale ? ' stale' : isInProgress ? ' in-progress' : ''); row.dataset.project = e.project;
         row.dataset.session = e.session; row.dataset.cwd = e.cwd;
         row.style.setProperty('--session-color', sessionColors[e.session] || 'transparent');
         row._entry = e;
