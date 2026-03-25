@@ -541,14 +541,16 @@
   function hideProject(name) {
     var h = getHidden();
     if (h.indexOf(name) === -1) { h.push(name); setHidden(h); }
+    closePeek();
     render();
     showToast(name + ' hidden');
   }
   function unhideProject(name) {
     setHidden(getHidden().filter(function(p) { return p !== name; }));
+    closePeek();
     render();
   }
-  function unhideAll() { setHidden([]); render(); }
+  function unhideAll() { closePeek(); setHidden([]); render(); }
 
   function showRestoreDialog() {
     var hidden = getHidden();
