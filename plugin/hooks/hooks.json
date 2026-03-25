@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/log-prompt.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/on-prompt.sh",
             "timeout": 5000
           }
         ]
