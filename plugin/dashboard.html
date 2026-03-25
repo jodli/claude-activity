@@ -318,6 +318,13 @@
   }
   .entry:hover::before, .entry.focused::before { background: var(--session-color, var(--text-dim)); }
 
+  /* In-progress state */
+  .entry.in-progress::before { background: var(--green); animation: pulse-live 2s ease-in-out infinite; }
+  .entry.in-progress .time { color: var(--green); }
+  .lt-ago.in-progress { color: var(--green); }
+  @keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  @media (prefers-reduced-motion: reduce) { .entry.in-progress::before { animation: none; } }
+
   /* Session hover-highlight */
   .timeline-hover .entry { opacity: 0.3; transition: opacity 0.15s ease-out; }
   .timeline-hover .entry.session-highlight { opacity: 1; background: color-mix(in srgb, var(--session-color, var(--accent)) 6%, transparent); }
@@ -618,7 +625,7 @@
       el.innerHTML = '<span class="clock">' + clockStr + '</span> ' + greet + ' — no sessions logged yet.';
       return;
     }
-    var last = entries[0];
+    var last = entries.find(function(e) { return e.response !== null; }) || entries[0];
     el.innerHTML = '<span class="clock">' + clockStr + '</span> <span class="context">' + greet +
       ' — last in <span class="context-project">' + esc(last.project) + '</span> ' + relTime(last.ts) + '</span>';
   }
@@ -711,7 +718,7 @@
       var ltPromptHtml = ltIsLong && !ltExpanded ? highlightVerb(e.prompt.slice(0, 80)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
       row.innerHTML =
         '<span class="lt-project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
-        '<span class="lt-ago">' + relTime(e.ts) + '</span>' +
+        '<span class="lt-ago' + (e.response === null ? ' in-progress' : '') + '">' + (e.response === null ? 'now' : relTime(e.ts)) + '</span>' +
         '<span class="lt-prompt' + (ltIsLong ? ' expandable' : '') + (ltExpanded ? ' expanded' : '') + '">' + ltPromptHtml + '</span>' +
         '<button class="btn-dismiss" data-project="' + esc(e.project) + '" title="Hide project">&times;</button>' +
         '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
@@ -751,9 +758,10 @@
       group.appendChild(header);
 
       byDate[date].forEach(function(e) {
-        var time = e.ts.split('T')[1].split(':').slice(0, 2).join(':');
+        var isInProgress = e.response === null;
+        var time = isInProgress ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
         var row = document.createElement('div');
-        row.className = 'entry'; row.dataset.project = e.project;
+        row.className = 'entry' + (isInProgress ? ' in-progress' : ''); row.dataset.project = e.project;
         row.dataset.session = e.session; row.dataset.cwd = e.cwd;
         row.style.setProperty('--session-color', sessionColors[e.session] || 'transparent');
         var entryKey = e.session + '|' + e.ts;
