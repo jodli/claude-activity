@@ -52,6 +52,33 @@ write_activity_js() {
   printf 'window.ACTIVITY_DATA = %s;\n' "$json" > "$tmp" && mv "$tmp" "$ACTIVITY_JS"
 }
 
+# --- One-time v0.4 migration ---
+
+ACTIVITY_JSONL="$DATA_DIR/activity.jsonl"
+
+maybe_migrate_v04() {
+  [ ! -f "$ACTIVITY_JSONL" ] && return 0
+
+  local migrated
+  migrated=$(tail -n "$MAX_ENTRIES" "$ACTIVITY_JSONL" | jq -s '
+    [.[] | {
+      ts, session, project, cwd, prompt,
+      response: "",
+      effort_total: null,
+      duration_s: null,
+      slug: null,
+      branch: null,
+      session_file: (.transcript // null)
+    }] | sort_by(.ts) | reverse
+  ' 2>/dev/null)
+
+  if [ -n "$migrated" ] && [ "$migrated" != "null" ] && [ "$migrated" != "[]" ]; then
+    echo "$migrated" | write_activity_js
+  fi
+
+  mv "$ACTIVITY_JSONL" "$ACTIVITY_JSONL.bak" 2>/dev/null
+}
+
 # --- Dashboard copy ---
 
 copy_dashboard() {

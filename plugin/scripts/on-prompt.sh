@@ -57,6 +57,8 @@ NEW_ENTRY=$(jq -n -c \
 {
   acquire_lock || exit 0
 
+  maybe_migrate_v04
+
   DATA=$(read_activity_json)
   echo "$DATA" | jq --argjson entry "$NEW_ENTRY" --argjson max "$MAX_ENTRIES" \
     '[$entry] + . | .[:$max]' | write_activity_js
