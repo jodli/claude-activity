@@ -6,8 +6,25 @@ DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude}"
 ACTIVITY_JS="$DATA_DIR/activity.js"
 LOCK_DIR="$DATA_DIR/.activity-lock"
 LOCK_PID="$LOCK_DIR/pid"
+HOOK_LOG="$DATA_DIR/hook.log"
 MAX_ENTRIES=1000
+MAX_LOG_BYTES=102400
 LOCK_TIMEOUT=5
+
+# --- Hook logging ---
+
+log_hook() {
+  local msg="$(date -u +%Y-%m-%dT%H:%M:%SZ) [$$] $*"
+  echo "$msg" >> "$HOOK_LOG" 2>/dev/null
+  # Truncate if over ~100KB: keep last ~80KB
+  if [ -f "$HOOK_LOG" ]; then
+    local size
+    size=$(wc -c < "$HOOK_LOG" 2>/dev/null)
+    if [ "${size:-0}" -gt "$MAX_LOG_BYTES" ]; then
+      tail -c 81920 "$HOOK_LOG" > "$HOOK_LOG.tmp" 2>/dev/null && mv "$HOOK_LOG.tmp" "$HOOK_LOG" 2>/dev/null
+    fi
+  fi
+}
 
 # --- Portable mkdir-based locking ---
 
