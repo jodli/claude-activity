@@ -66,11 +66,19 @@
 
   /* ======== BASE STYLES ======== */
 
+  /* z-index stack: filter-bar 10, theme-picker 30, peek-backdrop 40, peek 50, theme-menu 100, toast 110, modals 200 */
+
+  :root {
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --transition-fast: 0.15s ease-out;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
     background: var(--bg); color: var(--text);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-body);
     font-size: 14px; line-height: 1.6;
     padding: 24px 24px 48px; max-width: 940px; margin: 0 auto;
     position: relative; transition: background 0.2s, color 0.2s;
@@ -88,7 +96,8 @@
     font-variant-numeric: tabular-nums lining-nums;
   }
 
-  .mono { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; }
+  .mono { font-family: var(--font-mono); }
+  .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ---- Header ---- */
   header {
@@ -104,7 +113,7 @@
   header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
   header h1 .caret { color: var(--accent); }
   .header-right { display: flex; align-items: center; gap: 12px; }
-  .meta { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 
   /* ---- Theme Picker ---- */
   .theme-picker {
@@ -114,7 +123,7 @@
     background: var(--bg-surface); border: 1px solid var(--border);
     color: var(--text-muted); font-size: 14px; cursor: pointer;
     border-radius: 6px; padding: 4px 10px;
-    transition: border-color 0.15s;
+    transition: border-color var(--transition-fast);
   }
   .theme-btn:hover { border-color: var(--accent); }
   .theme-menu {
@@ -129,7 +138,7 @@
     padding: 6px 10px; border-radius: 4px; cursor: pointer;
     font-size: 12px; color: var(--text-dim); border: none;
     background: transparent; width: 100%; text-align: left;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     transition: background 0.1s;
   }
   .theme-option:hover { background: var(--bg-hover); color: var(--text); }
@@ -147,10 +156,10 @@
     border: 1px solid var(--border);
   }
   .view-toggle button {
-    font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-family: var(--font-mono);
     padding: 3px 10px; border-radius: 4px; cursor: pointer;
     color: var(--text-muted); background: transparent; border: 1px solid transparent;
-    transition: all 0.15s ease-out;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
   }
   .view-toggle button:hover { border-color: var(--accent); color: var(--text); }
   .view-toggle button.active { background: var(--accent-dim); color: var(--text); }
@@ -159,10 +168,10 @@
   /* ---- Greeting ---- */
   .greeting { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; }
   .greeting .clock {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; margin-right: 8px;
   }
-  .greeting .context-project { color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .greeting .context-project { color: var(--cyan); font-family: var(--font-mono); font-weight: 500; }
 
   /* ---- Filter Bar ---- */
   .filter-bar {
@@ -173,9 +182,9 @@
   }
   .search-box {
     background: var(--bg-surface); border: 1px solid var(--border);
-    color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--text); font-family: var(--font-mono); font-size: 12px;
     padding: 4px 10px; border-radius: 6px; outline: none; width: 180px;
-    transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   }
   .search-box:focus {
     border-color: var(--accent);
@@ -183,10 +192,10 @@
   }
   .search-box::placeholder { color: var(--text-muted); }
   .search-hint {
-    font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);
     background: var(--bg-surface); border: 1px solid var(--border);
     border-radius: 3px; padding: 1px 5px; margin-left: -32px;
-    pointer-events: none; transition: opacity 0.15s;
+    pointer-events: none; transition: opacity var(--transition-fast);
   }
   .search-box:focus ~ .search-hint { opacity: 0; }
   .filter-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
@@ -196,8 +205,8 @@
     border: 1px solid var(--pill-color, var(--text-muted));
     color: var(--pill-color, var(--text-dim));
     border-radius: 999px; padding: 3px 10px; cursor: pointer;
-    font-size: 11px; font-family: 'JetBrains Mono', monospace;
-    transition: background 0.15s ease-out, color 0.15s ease-out, box-shadow 0.15s ease-out;
+    font-size: 11px; font-family: var(--font-mono);
+    transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
     white-space: nowrap;
   }
   .pill:hover {
@@ -226,15 +235,15 @@
     border-bottom: 1px solid var(--border-light);
   }
   .lt-entry:last-child { border-bottom: none; }
-  .lt-project { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .lt-ago { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); text-align: right; }
-  .lt-prompt { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .lt-project { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+  .lt-ago { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); text-align: right; }
+  .lt-prompt { font-size: 12px; color: var(--text-dim); cursor: pointer; }
 
   .btn-resume {
     background: transparent; border: 1px solid var(--border);
-    color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 10px;
     padding: 2px 6px; border-radius: 4px; cursor: pointer;
-    white-space: nowrap; transition: all 0.15s ease-out; opacity: 0;
+    white-space: nowrap; transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast); opacity: 0;
   }
   .lt-entry:hover .btn-resume, .entry:hover .btn-resume { opacity: 1; }
   .btn-resume:hover { border-color: var(--accent); color: var(--accent); }
@@ -244,14 +253,14 @@
     background: transparent; border: 1px solid var(--border);
     color: var(--text-muted); font-size: 12px;
     padding: 2px 6px; border-radius: 4px; cursor: pointer;
-    white-space: nowrap; transition: all 0.15s ease-out; opacity: 0;
+    white-space: nowrap; transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast); opacity: 0;
   }
   .lt-entry:hover .btn-dismiss { opacity: 1; }
   .btn-dismiss:hover { border-color: var(--red); color: var(--red); }
 
   .badge-duration {
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted);
-    opacity: 0; transition: opacity 0.15s ease-out; white-space: nowrap; align-self: center;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+    opacity: 0; transition: opacity var(--transition-fast); white-space: nowrap; align-self: center;
   }
   .entry:hover .badge-duration { opacity: 1; }
 
@@ -260,8 +269,8 @@
   .lt-hidden-count {
     font-size: 10px; color: var(--text-muted); margin-left: auto;
     cursor: pointer; font-weight: 400; text-transform: none;
-    letter-spacing: normal; font-family: 'JetBrains Mono', monospace;
-    transition: color 0.15s;
+    letter-spacing: normal; font-family: var(--font-mono);
+    transition: color var(--transition-fast);
   }
   .lt-hidden-count:hover { color: var(--accent); }
 
@@ -269,21 +278,21 @@
   .restore-item {
     display: flex; justify-content: space-between; align-items: center;
     padding: 6px 0; border-bottom: 1px solid var(--border-light);
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim);
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);
   }
   .restore-item:last-child { border-bottom: none; }
   .btn-unhide {
     background: transparent; border: 1px solid var(--border);
-    color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 10px;
     padding: 2px 8px; border-radius: 4px; cursor: pointer;
-    transition: all 0.15s ease-out;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
   }
   .btn-unhide:hover { border-color: var(--green); color: var(--green); }
   .btn-unhide-all {
     background: transparent; border: 1px solid var(--border);
-    color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 11px;
     padding: 4px 12px; border-radius: 4px; cursor: pointer;
-    transition: all 0.15s ease-out; margin-top: 12px; width: 100%;
+    transition: color var(--transition-fast), border-color var(--transition-fast); margin-top: 12px; width: 100%;
   }
   .btn-unhide-all:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -306,7 +315,7 @@
     display: grid; grid-template-columns: 50px 120px 1fr auto auto;
     gap: 10px; padding: 4px 8px; border-radius: 6px;
     align-items: baseline; position: relative;
-    transition: background 0.12s ease-out, opacity 0.15s ease-out;
+    transition: background 0.12s ease-out, opacity var(--transition-fast);
     border-left: 2px solid var(--session-color, transparent); margin-left: -2px;
   }
   .entry:hover { background: var(--bg-hover); }
@@ -335,11 +344,11 @@
   .lt-ago.stale { color: var(--text-muted); }
 
   /* Session hover-highlight */
-  .timeline-hover .entry { opacity: 0.3; transition: opacity 0.15s ease-out; }
+  .timeline-hover .entry { opacity: 0.3; transition: opacity var(--transition-fast); }
   .timeline-hover .entry.session-highlight { opacity: 1; background: color-mix(in srgb, var(--session-color, var(--accent)) 6%, transparent); }
-  .time { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
-  .project { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .prompt-text { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; cursor: pointer; }
+  .time { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+  .project { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+  .prompt-text { font-size: 13px; color: var(--text); min-width: 0; cursor: pointer; }
 
   .verb { font-weight: 500; }
   .verb-fix, .verb-debug, .verb-remove, .verb-delete { color: var(--red); }
@@ -362,14 +371,14 @@
     font-size: 13px; color: var(--text); line-height: 1.5;
   }
   .peek-branch {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
-    margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
+    margin-bottom: 8px;
   }
   .peek-label { font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 2px; }
   .peek-prompt, .peek-response { white-space: pre-wrap; word-break: break-word; margin-bottom: 0; }
   .peek-divider { border: none; border-top: 1px solid var(--border-light); margin: 10px 0; }
   .peek-effort {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
     text-align: center; padding: 2px 0;
   }
   .peek-working { color: var(--text-muted); font-style: italic; padding: 4px 0; }
@@ -380,16 +389,16 @@
   .empty-state h2 { font-size: 16px; margin-bottom: 8px; color: var(--text-dim); }
   .empty-state p { font-size: 13px; margin-bottom: 12px; }
   .empty-state .action {
-    display: inline-block; font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    display: inline-block; font-size: 12px; font-family: var(--font-mono);
     color: var(--accent); cursor: pointer; border-bottom: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent);
-    transition: color 0.15s;
+    transition: color var(--transition-fast);
   }
   .empty-state .action:hover { color: var(--cyan); }
 
   .toast {
     position: fixed; bottom: 24px; right: 24px;
     background: var(--bg-surface); border: 1px solid var(--green);
-    color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--green); font-family: var(--font-mono); font-size: 12px;
     padding: 8px 16px; border-radius: 6px;
     opacity: 0; transform: translateY(8px);
     transition: all 0.2s ease-out; pointer-events: none; z-index: 110;
@@ -400,7 +409,7 @@
     position: fixed; inset: 0; z-index: 200;
     background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
     display: flex; align-items: center; justify-content: center;
-    opacity: 0; pointer-events: none; transition: opacity 0.15s ease-out;
+    opacity: 0; pointer-events: none; transition: opacity var(--transition-fast);
   }
   .kb-overlay.show { opacity: 1; pointer-events: auto; }
   .kb-box {
@@ -410,7 +419,7 @@
   .kb-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
   .kb-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; font-size: 13px; }
   .kb-row .kb-key {
-    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    font-family: var(--font-mono); font-size: 11px;
     background: var(--bg); border: 1px solid var(--border);
     border-radius: 4px; padding: 1px 6px; color: var(--text-dim);
     min-width: 24px; text-align: center;
@@ -654,7 +663,7 @@
     // Build popover content
     var html = '';
     if (e.branch && e.branch !== 'main') {
-      html += '<div class="peek-branch">' + esc(e.branch) + '</div>';
+      html += '<div class="peek-branch truncate">' + esc(e.branch) + '</div>';
     }
     html += '<div class="peek-label">You:</div>';
     html += '<div class="peek-prompt">' + highlightVerb(e.prompt) + '</div>';
@@ -825,7 +834,7 @@
       row._entry = e;
       var ltPromptHtml = e.prompt.length > 80 ? highlightVerb(e.prompt.slice(0, 80)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
       row.innerHTML =
-        '<span class="lt-project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
+        '<span class="lt-project truncate" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
         (function() {
           var ip = e.response === null;
           var st = ip && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
@@ -833,7 +842,7 @@
           var txt = ip && !st ? 'now' : relTime(e.ts);
           return '<span class="lt-ago' + cls + '">' + txt + '</span>';
         })() +
-        '<span class="lt-prompt" style="cursor:pointer">' + ltPromptHtml + '</span>' +
+        '<span class="lt-prompt truncate" style="cursor:pointer">' + ltPromptHtml + '</span>' +
         '<button class="btn-dismiss" data-project="' + esc(e.project) + '" title="Hide project">&times;</button>' +
         '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
       lt.appendChild(row);
@@ -877,8 +886,8 @@
         var promptHtml = e.prompt.length > 120 ? highlightVerb(e.prompt.slice(0, 120)) + '<span style="color:var(--text-muted)">...</span>' : highlightVerb(e.prompt);
         row.innerHTML =
           '<span class="time">' + time + '</span>' +
-          '<span class="project" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
-          '<span class="prompt-text" style="cursor:pointer">' + promptHtml + '</span>' +
+          '<span class="project truncate" style="color:' + projectColors[e.project] + '">' + esc(e.project) + worktreeTag(e.cwd) + '</span>' +
+          '<span class="prompt-text truncate" style="cursor:pointer">' + promptHtml + '</span>' +
           (e.duration_s ? '<span class="badge-duration">' + formatDuration(e.duration_s) + '</span>' : '<span></span>') +
           '<button class="btn-resume" data-cwd="' + esc(e.cwd) + '" data-session="' + esc(e.session) + '">resume</button>';
         group.appendChild(row);
