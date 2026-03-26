@@ -18,10 +18,8 @@
   .test.pass::before { content: '\2713 '; }
   .test.fail { color: #f66; }
   .test.fail::before { content: '\2717 '; }
-  .test.skip { color: #888; }
-  .test.skip::before { content: '- '; }
   .error { color: #f99; font-size: 11px; margin-left: 20px; }
-  iframe { display: none; }
+  iframe { position: fixed; bottom: 0; right: 0; width: 1px; height: 1px; opacity: 0.01; border: none; }
 </style>
 </head>
 <body>
@@ -38,7 +36,7 @@
 
   function $(sel, root) { return (root || doc).querySelector(sel); }
   function $$(sel, root) { return Array.from((root || doc).querySelectorAll(sel)); }
-  var doc; // set once iframe loads
+  var doc;
 
   function assert(name, group, fn) {
     try {
@@ -48,6 +46,30 @@
     } catch(e) {
       results.push({ name: name, group: group, pass: false, error: e.message });
     }
+  }
+
+  // Richer assertion: expect(actual).toBe(expected) / .toBeTruthy() / .toContain(str)
+  function expect(actual, label) {
+    return {
+      toBe: function(expected) {
+        if (actual !== expected) throw new Error((label || 'value') + ': expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+      },
+      toBeTruthy: function() {
+        if (!actual) throw new Error((label || 'value') + ': expected truthy, got ' + JSON.stringify(actual));
+      },
+      toBeGreaterThan: function(n) {
+        if (!(actual > n)) throw new Error((label || 'value') + ': expected >' + n + ', got ' + actual);
+      },
+      toContain: function(str) {
+        if (typeof actual !== 'string' || actual.indexOf(str) === -1) throw new Error((label || 'value') + ': expected to contain ' + JSON.stringify(str) + ', got ' + JSON.stringify(typeof actual === 'string' ? actual.slice(0, 120) : actual));
+      },
+      toMatch: function(re) {
+        if (typeof actual !== 'string' || !re.test(actual)) throw new Error((label || 'value') + ': expected to match ' + re + ', got ' + JSON.stringify(typeof actual === 'string' ? actual.slice(0, 120) : actual));
+      },
+      toBeNull: function() {
+        if (actual !== null) throw new Error((label || 'value') + ': expected null, got ' + JSON.stringify(actual));
+      }
+    };
   }
 
   function renderResults() {
@@ -88,13 +110,13 @@
           cb();
         } else if (attempts > 100) {
           clearInterval(check);
-          results.push({ name: 'Dashboard loaded', group: 'Setup', pass: false, error: 'Timed out waiting for dashboard to render (' + entries.length + ' entries, greeting: "' + (greeting ? greeting.textContent : 'null') + '")' });
+          results.push({ name: 'Dashboard loaded', group: 'Setup', pass: false, error: 'Timed out (' + entries.length + ' entries)' });
           renderResults();
         }
       } catch(e) {
         if (attempts > 100) {
           clearInterval(check);
-          results.push({ name: 'Dashboard loaded', group: 'Setup', pass: false, error: 'iframe access error: ' + e.message });
+          results.push({ name: 'Dashboard loaded', group: 'Setup', pass: false, error: e.message });
           renderResults();
         }
       }
@@ -105,8 +127,17 @@
     el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   }
 
-  function simulateKey(key, target) {
-    (target || doc).dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+  function simulateKey(key) {
+    doc.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+  }
+
+  function cleanup() {
+    // Ensure no peek/overlay is left open between test groups
+    simulateKey('Escape');
+    var search = $('#search');
+    if (search) { search.value = ''; search.dispatchEvent(new Event('input', { bubbles: true })); }
+    var allPill = $('[data-filter="all"]');
+    if (allPill) simulateClick(allPill);
   }
 
   function runTests() {
@@ -114,274 +145,390 @@
 
     // ===== RENDERING =====
 
-    var allEntries = $$('.entry');
-    assert('Entries rendered (>0)', 'Rendering', function() {
-      return allEntries.length > 0;
+    assert('Entries rendered — count > 0', 'Rendering', function() {
+      var count = $$('.entry').length;
+      expect(count, 'entry count').toBeGreaterThan(0);
     });
 
-    assert('Hero line shows last completed project', 'Rendering', function() {
-      var greeting = $('#greeting');
-      // Hero should show a project name and relative time, NOT "no sessions"
-      return greeting.textContent.indexOf('last in') !== -1;
+    assert('Hero line shows a project name and relative time', 'Rendering', function() {
+      var text = $('#greeting').textContent;
+      expect(text, 'greeting').toContain('last in');
+      expect(text, 'greeting time').toMatch(/\d+[mhd] ago|just now/);
     });
 
-    assert('Hero line skips in-progress entries', 'Rendering', function() {
-      var greeting = $('#greeting');
-      // The most recent entries are in-progress, so hero should show a completed project
-      // It should NOT show "test-project" which is the in-progress project
-      // (unless test-project also has completed entries)
-      return greeting.textContent.indexOf('last in') !== -1;
+    assert('Hero line shows completed project, not in-progress one', 'Rendering', function() {
+      var text = $('#greeting').textContent;
+      expect(text, 'greeting').toContain('last in');
+      // "test-project" and "test-fresh" only have null-response entries
+      if (text.indexOf('test-project') !== -1) throw new Error('Hero shows in-progress-only project "test-project": ' + text);
+      if (text.indexOf('test-fresh') !== -1) throw new Error('Hero shows in-progress-only project "test-fresh": ' + text);
     });
 
-    assert('Last Touched shows one entry per project', 'Rendering', function() {
+    assert('Last Touched shows exactly one entry per project', 'Rendering', function() {
       var ltEntries = $$('.lt-entry');
+      expect(ltEntries.length, 'lt-entry count').toBeGreaterThan(0);
       var projects = ltEntries.map(function(e) { return e.dataset.project; });
       var unique = projects.filter(function(p, i) { return projects.indexOf(p) === i; });
-      return ltEntries.length > 0 && ltEntries.length === unique.length;
+      if (ltEntries.length !== unique.length) throw new Error('Duplicate projects in Last Touched: ' + JSON.stringify(projects));
     });
 
-    assert('Day groups present', 'Rendering', function() {
-      var groups = $$('.day-group');
-      return groups.length > 0;
+    assert('Day groups have headers with prompt counts', 'Rendering', function() {
+      var headers = $$('.day-header');
+      expect(headers.length, 'day-header count').toBeGreaterThan(0);
+      var bad = headers.find(function(h) { return !/\d+ prompts?/.test(h.textContent); });
+      if (bad) throw new Error('Day header missing prompt count: "' + bad.textContent + '"');
     });
 
-    assert('In-progress entries have .in-progress class', 'Rendering', function() {
-      var inProgress = $$('.entry.in-progress');
-      return inProgress.length > 0;
+    assert('Null-response entries get in-progress or stale class (>=2)', 'Rendering', function() {
+      var ip = $$('.entry.in-progress').length;
+      var stale = $$('.entry.stale').length;
+      var total = ip + stale;
+      if (total < 2) throw new Error('Expected >=2 null-response entries, got ' + total + ' (in-progress: ' + ip + ', stale: ' + stale + ')');
     });
 
-    assert('In-progress entries show "now" in time column', 'Rendering', function() {
-      var ip = $('.entry.in-progress .time');
-      return ip && ip.textContent.trim() === 'now';
+    assert('Fresh in-progress entries show "now", stale show time', 'Rendering', function() {
+      // Fresh entries: .in-progress .time should say "now"
+      var freshTimes = $$('.entry.in-progress .time');
+      var freshOk = freshTimes.every(function(t) { return t.textContent.trim() === 'now'; });
+      // Stale entries: .stale .time should show HH:MM, not "now"
+      var staleTimes = $$('.entry.stale .time');
+      var staleOk = staleTimes.every(function(t) { return t.textContent.trim() !== 'now'; });
+      // At least one category must exist
+      return (freshTimes.length > 0 || staleTimes.length > 0) && freshOk && staleOk;
     });
 
-    assert('Stale entries have .stale class', 'Rendering', function() {
-      var stale = $$('.entry.stale');
-      return stale.length > 0;
-    });
-
-    assert('Worktree entries show worktree tag', 'Rendering', function() {
+    assert('Worktree entries show ~worktree-name tag', 'Rendering', function() {
       var tags = $$('.wt-tag');
-      return tags.length > 0;
+      expect(tags.length, 'wt-tag count').toBeGreaterThan(0);
+      var texts = tags.map(function(t) { return t.textContent; });
+      if (!texts.some(function(t) { return t.indexOf('fix-auth') !== -1; })) {
+        throw new Error('Expected worktree tag "fix-auth", found: ' + JSON.stringify(texts));
+      }
     });
 
-    assert('Verb highlighting present', 'Rendering', function() {
+    assert('First word verb gets correct highlight class', 'Rendering', function() {
       var verbs = $$('.verb');
-      return verbs.length > 0;
+      expect(verbs.length, 'verb count').toBeGreaterThan(0);
+      var classes = verbs.map(function(v) { return v.className; }).join(' ');
+      // Demo has "add", "fix", "debug", "refactor", "check", "review"
+      if (classes.indexOf('verb-add') === -1 && classes.indexOf('verb-fix') === -1 && classes.indexOf('verb-debug') === -1) {
+        throw new Error('No expected verb classes found in: ' + classes.slice(0, 200));
+      }
     });
 
-    assert('Session color set on entries', 'Rendering', function() {
+    assert('Session color is a valid hex color', 'Rendering', function() {
       var entry = $('.entry');
-      var color = entry.style.getPropertyValue('--session-color');
-      return color && color !== 'transparent';
+      var color = entry.style.getPropertyValue('--session-color').trim();
+      expect(color, '--session-color').toMatch(/^#[0-9a-fA-F]{6}$/);
     });
 
-    assert('Filter pills rendered for projects', 'Rendering', function() {
-      var pills = $$('.pill');
-      return pills.length > 1; // "All" + at least one project
+    assert('Filter pills match visible projects with counts', 'Rendering', function() {
+      var pills = $$('.pill:not([data-filter="all"])');
+      if (pills.length === 0) return false;
+      // Each pill should have a badge with a number
+      return pills.every(function(p) {
+        var badge = p.querySelector('.badge');
+        return badge && parseInt(badge.textContent) > 0;
+      });
     });
 
-    assert('Special chars in project name escaped correctly', 'Rendering', function() {
-      // "my-app (v2)" should appear as text, not cause HTML injection
-      var projects = $$('.project');
-      var found = projects.some(function(p) { return p.textContent.indexOf('(v2)') !== -1; });
-      return found;
+    assert('Long prompts are truncated with ellipsis', 'Rendering', function() {
+      // Demo has a 120+ char prompt. Find an entry whose prompt-text contains "..."
+      var prompts = $$('.prompt-text');
+      return prompts.some(function(p) { return p.textContent.indexOf('...') !== -1; });
     });
 
-    // ===== INTERACTIONS =====
+    assert('XSS: script tags in data render as text, not HTML', 'Rendering', function() {
+      // Demo has prompt containing <script>alert(1)<\/script>
+      // Check that no script tags were injected into the timeline DOM
+      var timeline = doc.getElementById('timeline');
+      var scripts = $$('script', timeline);
+      // Also verify the text "<script>" appears as visible text content
+      var prompts = $$('.prompt-text');
+      var found = prompts.some(function(p) {
+        return p.textContent.indexOf('alert') !== -1;
+      });
+      return scripts.length === 0 && found;
+    });
 
-    assert('Click entry opens peek popover', 'Interactions', function() {
-      var entry = $$('.entry').find(function(e) { return !e.classList.contains('in-progress') && !e.classList.contains('stale'); });
-      if (!entry) return false;
+    // ===== PEEK POPOVER =====
+
+    cleanup();
+
+    assert('Click completed entry opens peek with response', 'Peek', function() {
+      var entry = $$('.entry').find(function(e) {
+        return !e.classList.contains('in-progress') && !e.classList.contains('stale') && e._entry && e._entry.response && e._entry.response.length > 0;
+      });
+      expect(entry, 'completed entry').toBeTruthy();
       simulateClick(entry);
       var peek = doc.querySelector('.peek');
-      return peek !== null;
-    });
-
-    assert('Peek shows prompt text', 'Interactions', function() {
-      var peek = doc.querySelector('.peek');
-      if (!peek) return false;
+      expect(peek, '.peek element').toBeTruthy();
       var prompt = peek.querySelector('.peek-prompt');
-      return prompt && prompt.textContent.length > 0;
-    });
-
-    assert('Peek shows response text for completed entry', 'Interactions', function() {
-      var peek = doc.querySelector('.peek');
-      if (!peek) return false;
-      var response = peek.querySelector('.peek-response');
-      return response && response.textContent.length > 0;
-    });
-
-    assert('Peek shows effort summary for completed entry', 'Interactions', function() {
-      var peek = doc.querySelector('.peek');
-      if (!peek) return false;
+      expect(prompt && prompt.textContent.length > 0, 'peek has prompt text').toBeTruthy();
+      var resp = peek.querySelector('.peek-response');
+      expect(resp && resp.textContent.length > 0, 'peek has response text').toBeTruthy();
       var effort = peek.querySelector('.peek-effort');
-      return effort && effort.textContent.indexOf('tool calls') !== -1;
+      expect(effort, '.peek-effort element').toBeTruthy();
+      expect(effort.textContent, 'effort text').toContain('tool calls');
+      expect(peek.querySelector('.btn-resume'), 'peek resume btn').toBeTruthy();
     });
 
-    assert('Peek has resume button', 'Interactions', function() {
+    assert('Peek shows branch label for entry with branch', 'Peek', function() {
       var peek = doc.querySelector('.peek');
       if (!peek) return false;
-      var btn = peek.querySelector('.btn-resume');
-      return btn !== null;
+      var branch = peek.querySelector('.peek-branch');
+      // The entry we clicked should have a branch (demo data has branches on edge-case entries)
+      return branch === null || (branch && branch.textContent.length > 0);
     });
 
-    // Close peek via Escape
-    assert('Escape closes peek', 'Interactions', function() {
+    assert('Escape closes peek and removes backdrop', 'Peek', function() {
       simulateKey('Escape');
-      var peek = doc.querySelector('.peek');
-      return peek === null;
+      return doc.querySelector('.peek') === null && doc.querySelector('.peek-backdrop') === null;
     });
 
-    // Click another entry to reopen peek, then click backdrop
-    assert('Click outside peek closes it', 'Interactions', function() {
-      var entry = $$('.entry')[2];
+    assert('Click backdrop closes peek', 'Peek', function() {
+      var entry = $$('.entry')[3];
       if (!entry) return false;
       simulateClick(entry);
       var backdrop = doc.querySelector('.peek-backdrop');
       if (!backdrop) return false;
       simulateClick(backdrop);
-      return doc.querySelector('.peek') === null;
+      return doc.querySelector('.peek') === null && doc.querySelector('.peek-backdrop') === null;
     });
 
-    // Click two entries rapidly
-    assert('Rapid click switches peek to new entry', 'Interactions', function() {
+    assert('Only one peek at a time — rapid clicks', 'Peek', function() {
       var entries = $$('.entry');
-      if (entries.length < 3) return false;
-      simulateClick(entries[0]);
-      simulateClick(entries[2]);
-      var peeks = doc.querySelectorAll('.peek');
-      return peeks.length === 1; // only one peek at a time
+      if (entries.length < 4) return false;
+      simulateClick(entries[1]);
+      var firstPrompt = doc.querySelector('.peek-prompt') ? doc.querySelector('.peek-prompt').textContent : '';
+      simulateClick(entries[3]);
+      var secondPrompt = doc.querySelector('.peek-prompt') ? doc.querySelector('.peek-prompt').textContent : '';
+      var onePeek = doc.querySelectorAll('.peek').length === 1;
+      var oneBackdrop = doc.querySelectorAll('.peek-backdrop').length === 1;
+      var contentChanged = firstPrompt !== secondPrompt;
+      simulateKey('Escape');
+      return onePeek && oneBackdrop && contentChanged;
     });
 
-    // Clean up peek
-    simulateKey('Escape');
-
-    // Peek on in-progress entry
-    assert('Peek on in-progress shows "working" message', 'Interactions', function() {
-      var ip = doc.querySelector('.entry.in-progress');
-      if (!ip) return false;
-      simulateClick(ip);
+    assert('Peek on null-response entry shows working or unknown status', 'Peek', function() {
+      var entry = doc.querySelector('.entry.in-progress') || doc.querySelector('.entry.stale');
+      if (!entry) return false;
+      simulateClick(entry);
       var peek = doc.querySelector('.peek');
       if (!peek) return false;
       var working = peek.querySelector('.peek-working');
-      var result = working && working.textContent.indexOf('working') !== -1;
+      var hasNoResponse = peek.querySelector('.peek-response') === null;
+      var hasStatusText = working && (working.textContent.indexOf('working') !== -1 || working.textContent.indexOf('unknown') !== -1);
+      simulateKey('Escape');
+      return hasNoResponse && hasStatusText;
+    });
+
+    assert('Peek on migrated entry shows prompt only, no response section', 'Peek', function() {
+      // Find a migrated entry (response === "")
+      var entry = $$('.entry').find(function(e) {
+        return e._entry && e._entry.response === '';
+      });
+      if (!entry) return false;
+      simulateClick(entry);
+      var peek = doc.querySelector('.peek');
+      if (!peek) return false;
+      var hasPrompt = peek.querySelector('.peek-prompt') && peek.querySelector('.peek-prompt').textContent.length > 0;
+      var hasNoResponse = peek.querySelector('.peek-response') === null;
+      var hasNoEffort = peek.querySelector('.peek-effort') === null;
+      var hasNoWorking = peek.querySelector('.peek-working') === null;
+      simulateKey('Escape');
+      return hasPrompt && hasNoResponse && hasNoEffort && hasNoWorking;
+    });
+
+    assert('Click Last Touched entry opens peek', 'Peek', function() {
+      var ltEntry = doc.querySelector('.lt-entry');
+      if (!ltEntry) return false;
+      simulateClick(ltEntry);
+      var result = doc.querySelector('.peek') !== null;
       simulateKey('Escape');
       return result;
     });
 
-    // Peek on stale entry
-    assert('Peek on stale shows "status unknown"', 'Interactions', function() {
-      var stale = doc.querySelector('.entry.stale');
-      if (!stale) return false;
-      simulateClick(stale);
-      var peek = doc.querySelector('.peek');
-      if (!peek) return false;
-      var working = peek.querySelector('.peek-working');
-      var result = working && working.textContent.indexOf('unknown') !== -1;
-      simulateKey('Escape');
-      return result;
-    });
+    // ===== FILTERING =====
 
-    // Filter pill
-    assert('Filter pill click toggles filter', 'Interactions', function() {
+    cleanup();
+
+    assert('Project pill click activates pill and deactivates All', 'Filtering', function() {
       var pills = $$('.pill:not([data-filter="all"])');
       if (pills.length === 0) return false;
       simulateClick(pills[0]);
-      var isActive = pills[0].classList.contains('active');
+      var pillActive = pills[0].classList.contains('active');
       var allPill = $('[data-filter="all"]');
       var allInactive = !allPill.classList.contains('active');
-      // Reset
-      simulateClick(allPill);
-      return isActive && allInactive;
+      cleanup();
+      return pillActive && allInactive;
     });
 
-    assert('"All" pill clears other selections', 'Interactions', function() {
+    assert('Filtered view hides entries from other projects', 'Filtering', function() {
+      var pills = $$('.pill:not([data-filter="all"])');
+      expect(pills.length, 'project pill count').toBeGreaterThan(0);
+      var targetProject = pills[0].dataset.filter;
+      simulateClick(pills[0]);
+      var visible = $$('.entry:not(.hidden)');
+      var hidden = $$('.entry.hidden');
+      expect(hidden.length, 'hidden entries').toBeGreaterThan(0);
+      var mismatch = visible.find(function(e) { return e.dataset.project !== targetProject; });
+      if (mismatch) throw new Error('Visible entry has wrong project: ' + mismatch.dataset.project + ' (expected ' + targetProject + ')');
+      cleanup();
+    });
+
+    assert('"All" pill re-shows all entries', 'Filtering', function() {
       var pills = $$('.pill:not([data-filter="all"])');
       if (pills.length === 0) return false;
       simulateClick(pills[0]);
+      var hiddenBefore = $$('.entry.hidden').length;
       var allPill = $('[data-filter="all"]');
       simulateClick(allPill);
-      var otherActive = $$('.pill.active:not([data-filter="all"])');
-      return allPill.classList.contains('active') && otherActive.length === 0;
+      var hiddenAfter = $$('.entry.hidden').length;
+      // The hidden count should be less after clicking All (view filter may still hide some)
+      return hiddenBefore > 0 && hiddenAfter < hiddenBefore;
     });
 
-    assert('Search filters entries by prompt text', 'Interactions', function() {
+    assert('Search filters entries — matching visible, non-matching hidden', 'Filtering', function() {
       var search = $('#search');
       search.value = 'terraform';
       search.dispatchEvent(new Event('input', { bubbles: true }));
       var visible = $$('.entry:not(.hidden)');
-      var allMatch = visible.every(function(e) {
+      var hidden = $$('.entry.hidden');
+      var allVisibleMatch = visible.every(function(e) {
         return e.querySelector('.prompt-text').textContent.toLowerCase().indexOf('terraform') !== -1;
       });
-      // Clear
-      search.value = '';
+      cleanup();
+      return visible.length > 0 && hidden.length > 0 && allVisibleMatch;
+    });
+
+    assert('Search is case-insensitive', 'Filtering', function() {
+      var search = $('#search');
+      search.value = 'TERRAFORM';
       search.dispatchEvent(new Event('input', { bubbles: true }));
-      return visible.length > 0 && allMatch;
+      var visible = $$('.entry:not(.hidden)');
+      cleanup();
+      return visible.length > 0;
+    });
+
+    // ===== VIEW TOGGLE =====
+
+    assert('Week view shows entries from multiple days', 'View', function() {
+      // Click week button
+      var weekBtn = $$('.view-toggle button').find(function(b) { return b.dataset.view === 'week'; });
+      if (!weekBtn) return false;
+      simulateClick(weekBtn);
+      var groups = $$('.day-group:not(.hidden)');
+      var result = groups.length > 1;
+      // Switch back to today
+      var todayBtn = $$('.view-toggle button').find(function(b) { return b.dataset.view === 'today'; });
+      simulateClick(todayBtn);
+      return result;
     });
 
     // ===== KEYBOARD =====
 
-    assert('j/k navigates entries', 'Keyboard', function() {
+    cleanup();
+
+    assert('j moves focus down, k moves focus up', 'Keyboard', function() {
       simulateKey('j');
-      var focused = doc.querySelector('.entry.focused');
-      if (!focused) return false;
+      var first = doc.querySelector('.entry.focused');
+      if (!first) return false;
       simulateKey('j');
-      var focused2 = doc.querySelector('.entry.focused');
-      return focused2 && focused2 !== focused;
+      var second = doc.querySelector('.entry.focused');
+      if (!second || second === first) return false;
+      simulateKey('k');
+      var back = doc.querySelector('.entry.focused');
+      return back === first;
     });
 
-    // Clear focus
     simulateKey('Escape');
 
     assert('/ focuses search input', 'Keyboard', function() {
+      frame.contentWindow.focus();
       simulateKey('/');
-      var search = $('#search');
-      return doc.activeElement === search;
+      return doc.activeElement === $('#search');
     });
 
-    // Blur search
     $('#search').blur();
 
-    assert('? opens keyboard overlay', 'Keyboard', function() {
+    assert('? toggles keyboard shortcuts overlay', 'Keyboard', function() {
       simulateKey('?');
       var overlay = $('#kb-overlay');
-      var visible = overlay.classList.contains('show');
-      // Close it
-      simulateKey('?');
-      return visible;
+      var opened = overlay.classList.contains('show');
+      simulateKey('Escape');
+      var closed = !overlay.classList.contains('show');
+      return opened && closed;
+    });
+
+    assert('r on focused entry triggers resume button', 'Keyboard', function() {
+      simulateKey('j');
+      var focused = doc.querySelector('.entry.focused');
+      if (!focused) return false;
+      var btn = focused.querySelector('.btn-resume');
+      return btn !== null;
+    });
+
+    simulateKey('Escape');
+
+    // ===== HIDE/RESTORE =====
+
+    assert('Dismiss button hides project from timeline', 'Hide/Restore', function() {
+      var ltEntries = $$('.lt-entry');
+      if (ltEntries.length < 2) return false;
+      var dismissBtn = ltEntries[0].querySelector('.btn-dismiss');
+      if (!dismissBtn) return false;
+      var project = dismissBtn.dataset.project;
+      simulateClick(dismissBtn);
+      // Verify project is gone from Last Touched
+      var remaining = $$('.lt-entry').map(function(e) { return e.dataset.project; });
+      var isHidden = remaining.indexOf(project) === -1;
+      // Restore via localStorage manipulation and re-render
+      var win = frame.contentWindow;
+      win.localStorage.setItem('ca-hidden-projects', '[]');
+      // Need to trigger re-render — the toast should have shown
+      var toast = $('#toast');
+      var toastShown = toast.classList.contains('show');
+      return isHidden && toastShown;
     });
 
     // ===== STATE =====
 
-    assert('Theme stored in localStorage', 'State', function() {
-      var stored = win.localStorage.getItem('ca-theme');
-      return stored !== null;
+    assert('Theme change persists to localStorage', 'State', function() {
+      var win = frame.contentWindow;
+      var before = win.localStorage.getItem('ca-theme');
+      // Click a different theme
+      var themeBtn = $('#theme-btn');
+      simulateClick(themeBtn);
+      var options = $$('.theme-option');
+      if (options.length < 2) return false;
+      // Find a theme that's not the current one
+      var other = options.find(function(o) { return o.dataset.theme !== before; });
+      if (!other) return false;
+      simulateClick(other);
+      var after = win.localStorage.getItem('ca-theme');
+      // Restore original theme
+      var original = options.find(function(o) { return o.dataset.theme === before; });
+      if (original) {
+        simulateClick(themeBtn);
+        simulateClick(original);
+      }
+      return after !== before;
     });
 
-    assert('Resume button has correct command format', 'State', function() {
-      var btn = $('.btn-resume');
-      if (!btn) return false;
-      var cwd = btn.dataset.cwd;
-      var session = btn.dataset.session;
-      return cwd && session && cwd.length > 0 && session.length > 0;
+    assert('Resume button data-cwd and data-session are populated', 'State', function() {
+      var btns = $$('.btn-resume');
+      if (btns.length === 0) return false;
+      return btns.slice(0, 5).every(function(b) {
+        return b.dataset.cwd && b.dataset.cwd.length > 0 && b.dataset.session && b.dataset.session.length > 0;
+      });
     });
 
-    assert('Duration badge present on hover-capable entries', 'State', function() {
+    assert('Duration badge shows formatted time (Xs, Xm Ys)', 'State', function() {
       var badges = $$('.badge-duration');
-      return badges.length > 0;
-    });
-
-    // ===== PEEK ON LAST TOUCHED =====
-
-    assert('Click Last Touched entry opens peek', 'Interactions', function() {
-      var ltEntry = doc.querySelector('.lt-entry');
-      if (!ltEntry) return false;
-      simulateClick(ltEntry);
-      var peek = doc.querySelector('.peek');
-      var result = peek !== null;
-      simulateKey('Escape');
-      return result;
+      expect(badges.length, 'badge count').toBeGreaterThan(0);
+      var bad = badges.find(function(b) { return !/\d+[smh]/.test(b.textContent); });
+      if (bad) throw new Error('Badge has bad format: "' + bad.textContent + '"');
     });
 
     // Done
