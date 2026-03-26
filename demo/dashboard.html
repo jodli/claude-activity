@@ -695,17 +695,21 @@
     setTimeout(function() { $toast.classList.remove('show'); }, 2000);
   }
 
+  var peekAnchor = null;
+
   function closePeek() {
     var old = document.querySelector('.peek');
     if (old) old.remove();
     var bd = document.querySelector('.peek-backdrop');
     if (bd) bd.remove();
     state.peekEntry = null;
+    if (peekAnchor) { peekAnchor.focus(); peekAnchor = null; }
   }
 
   function openPeek(e, anchor) {
     closePeek();
     state.peekEntry = e;
+    peekAnchor = anchor;
 
     var children = [];
     if (e.branch && e.branch !== 'main') {
@@ -757,6 +761,10 @@
     left = Math.max(8, Math.min(left, window.innerWidth - pop.offsetWidth - 8));
     pop.style.top = top + 'px';
     pop.style.left = left + 'px';
+
+    // Focus management: move focus into popover
+    var resumeBtn = pop.querySelector('.btn-resume');
+    if (resumeBtn) resumeBtn.focus();
   }
 
   function updateGreeting() {
@@ -853,7 +861,7 @@
         var st = ip && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
         var agoCls = 'lt-ago' + (st ? ' stale' : ip ? ' in-progress' : '');
         var agoTxt = ip && !st ? 'now' : relTime(e.ts);
-        var row = el('div', {className: 'lt-entry', dataset: {project: e.project}},
+        var row = el('div', {className: 'lt-entry', tabIndex: -1, dataset: {project: e.project}},
           el('span', {className: 'lt-project truncate', style: {color: state.projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
           el('span', {className: agoCls}, agoTxt),
           el('span', {className: 'lt-prompt truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 80)),
@@ -897,7 +905,7 @@
           var timeStr = isInProgress && !isStale ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
           var cls = 'entry' + (isStale ? ' stale' : isInProgress ? ' in-progress' : '');
           var durStr = formatDuration(e.duration_s);
-          var row = el('div', {className: cls, dataset: {project: e.project, session: e.session, cwd: e.cwd}},
+          var row = el('div', {className: cls, tabIndex: -1, dataset: {project: e.project, session: e.session, cwd: e.cwd}},
             el('span', {className: 'time'}, timeStr),
             el('span', {className: 'project truncate', style: {color: state.projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
             el('span', {className: 'prompt-text truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 120)),
