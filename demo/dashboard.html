@@ -506,7 +506,10 @@
 <script src="activity.js"></script>
 <script>
 (function() {
-  // -- Theme-specific project colors --
+  'use strict';
+
+  // ======== CONSTANTS ========
+
   var THEME_COLORS = {
     'tokyo-night':       ['#7dcfff','#bb9af7','#9ece6a','#e0af68','#7aa2f7','#f7768e','#73daca','#ff9e64'],
     'catppuccin-mocha':  ['#89dceb','#cba6f7','#a6e3a1','#fab387','#89b4fa','#f38ba8','#94e2d5','#f9e2af'],
@@ -515,7 +518,6 @@
     'rose-pine-dawn':    ['#56949f','#907aa9','#286983','#ea9d34','#907aa9','#b4637a','#56949f','#d7827e']
   };
 
-  // -- Session colors (separate palette, offset from project colors) --
   var SESSION_COLORS = {
     'tokyo-night':       ['#f7768e','#73daca','#e0af68','#bb9af7','#7dcfff','#9ece6a','#ff9e64','#7aa2f7'],
     'catppuccin-mocha':  ['#f38ba8','#94e2d5','#fab387','#cba6f7','#89dceb','#a6e3a1','#f9e2af','#89b4fa'],
@@ -524,90 +526,6 @@
     'rose-pine-dawn':    ['#b4637a','#56949f','#ea9d34','#907aa9','#286983','#56949f','#d7827e','#907aa9']
   };
 
-  var REFRESH_MS = 10000;
-  var STALE_MS = 600000; // 10 minutes
-  var HIDDEN_KEY = 'ca-hidden-projects';
-  var entries = [];
-  var projectColors = {};
-  var sessionColors = {};
-
-  var currentView = 'today';
-  var currentTheme = localStorage.getItem('ca-theme') || 'tokyo-night';
-  var focusedIdx = -1;
-
-  function hashStr(s) {
-    var h = 0;
-    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
-    return Math.abs(h);
-  }
-
-  function getHidden() {
-    try { return JSON.parse(localStorage.getItem(HIDDEN_KEY)) || []; }
-    catch(e) { return []; }
-  }
-  function setHidden(list) { localStorage.setItem(HIDDEN_KEY, JSON.stringify(list)); }
-
-  function hideProject(name) {
-    var h = getHidden();
-    if (h.indexOf(name) === -1) { h.push(name); setHidden(h); }
-    closePeek();
-    render();
-    showToast(name + ' hidden');
-  }
-  function unhideProject(name) {
-    setHidden(getHidden().filter(function(p) { return p !== name; }));
-    closePeek();
-    render();
-  }
-  function unhideAll() { closePeek(); setHidden([]); render(); }
-
-  function showRestoreDialog() {
-    var hidden = getHidden();
-    var list = document.getElementById('restore-list');
-    list.textContent = '';
-    if (hidden.length === 0) {
-      list.appendChild(el('li', {style: {color: 'var(--text-muted)', fontSize: '12px', padding: '8px 0'}}, 'No hidden projects'));
-    } else {
-      hidden.forEach(function(name) {
-        list.appendChild(el('li', {className: 'restore-item'},
-          el('span', null, name),
-          el('button', {className: 'btn-unhide', onclick: function() { unhideProject(name); showRestoreDialog(); }}, 'unhide')
-        ));
-      });
-    }
-    document.getElementById('btn-unhide-all').style.display = hidden.length > 1 ? '' : 'none';
-    document.getElementById('restore-overlay').classList.add('show');
-  }
-
-  // -- Theme --
-  function setTheme(name) {
-    currentTheme = name;
-    document.documentElement.setAttribute('data-theme', name);
-    localStorage.setItem('ca-theme', name);
-    document.querySelectorAll('.theme-option').forEach(function(o) {
-      o.classList.toggle('active', o.dataset.theme === name);
-    });
-    if (entries.length > 0) render();
-  }
-
-  setTheme(currentTheme);
-
-  document.getElementById('theme-btn').addEventListener('click', function(e) {
-    e.stopPropagation();
-    document.getElementById('theme-menu').classList.toggle('show');
-  });
-  document.addEventListener('click', function() {
-    document.getElementById('theme-menu').classList.remove('show');
-  });
-  document.querySelectorAll('.theme-option').forEach(function(opt) {
-    opt.addEventListener('click', function(e) {
-      e.stopPropagation();
-      setTheme(this.dataset.theme);
-      document.getElementById('theme-menu').classList.remove('show');
-    });
-  });
-
-  // -- Action verb detection --
   var VERBS = {
     fix:'fix', debug:'debug', remove:'remove', delete:'delete',
     add:'add', build:'build', create:'create', write:'write', implement:'implement',
@@ -616,7 +534,43 @@
     test:'test', run:'run', deploy:'deploy', install:'install', setup:'setup'
   };
 
-  // -- DOM builder (XSS-safe by construction) --
+  var REFRESH_MS = 10000;
+  var STALE_MS = 600000;
+  var HIDDEN_KEY = 'ca-hidden-projects';
+
+  // ======== STATE ========
+
+  var state = {
+    entries: [],
+    projectColors: {},
+    sessionColors: {},
+    view: 'today',
+    theme: localStorage.getItem('ca-theme') || 'tokyo-night',
+    focusedIdx: -1,
+    peekEntry: null,
+    hoverTimeout: null
+  };
+
+  // ======== DOM REFS ========
+
+  var $timeline = document.getElementById('timeline');
+  var $greeting = document.getElementById('greeting');
+  var $search = document.getElementById('search');
+  var $meta = document.getElementById('meta');
+  var $filterBar = document.getElementById('filter-bar');
+  var $lastTouched = document.getElementById('last-touched');
+  var $ltHeader = $lastTouched.querySelector('.lt-header');
+  var $toast = document.getElementById('toast');
+  var $kbOverlay = document.getElementById('kb-overlay');
+  var $restoreOverlay = document.getElementById('restore-overlay');
+  var $restoreList = document.getElementById('restore-list');
+  var $themeBtn = document.getElementById('theme-btn');
+  var $themeMenu = document.getElementById('theme-menu');
+  var $unhideAll = document.getElementById('btn-unhide-all');
+  var $pillAll = document.querySelector('[data-filter="all"]');
+
+  // ======== UTILITIES ========
+
   function el(tag, attrs) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -638,12 +592,48 @@
     return node;
   }
 
+  function hashStr(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
+
+  function relTime(iso) {
+    var diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 172800) return '1d ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function formatDuration(s) {
+    if (s == null || s <= 0) return null;
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  }
+
+  function todayStr() { return new Date().toISOString().split('T')[0]; }
+  function yesterdayStr() { var d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; }
+
+  function dateLabel(ds) {
+    if (ds === todayStr()) return 'Today';
+    if (ds === yesterdayStr()) return 'Yesterday';
+    return new Date(ds + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  }
+
+  function dateTag(ds) {
+    if (ds === todayStr()) return 'today';
+    if (ds === yesterdayStr()) return 'recent';
+    return 'older';
+  }
+
   function highlightVerb(text) {
     var first = text.split(/[\s:,]/)[0].toLowerCase();
     if (VERBS[first]) {
-      var span = el('span', {className: 'verb verb-' + first}, text.slice(0, first.length));
       var frag = document.createDocumentFragment();
-      frag.appendChild(span);
+      frag.appendChild(el('span', {className: 'verb verb-' + first}, text.slice(0, first.length)));
       frag.appendChild(document.createTextNode(text.slice(first.length)));
       return frag;
     }
@@ -666,37 +656,49 @@
     return frag;
   }
 
-  function relTime(iso) {
-    var diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    if (diff < 172800) return '1d ago';
-    return Math.floor(diff / 86400) + 'd ago';
+  function worktreeTag(cwd) {
+    var m = cwd.match(/\/.claude\/worktrees\/(.+)$/);
+    return m ? el('span', {className: 'wt-tag'}, m[1]) : null;
   }
 
-  function formatDuration(s) {
-    if (s == null || s <= 0) return null;
-    if (s < 60) return s + 's';
-    if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
-    return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  function fixProject(e) {
+    var m = e.cwd.match(/^(.+)\/.claude\/worktrees\//);
+    if (m) e.project = m[1].split('/').pop();
+    return e;
   }
 
-  var peekEntry = null;
+  function getHidden() {
+    try { return JSON.parse(localStorage.getItem(HIDDEN_KEY)) || []; }
+    catch(e) { return []; }
+  }
+
+  function setHidden(list) { localStorage.setItem(HIDDEN_KEY, JSON.stringify(list)); }
+
+  function isInputFocused() {
+    var t = (document.activeElement || {}).tagName;
+    return t === 'INPUT' || t === 'TEXTAREA';
+  }
+
+  // ======== RENDERING ========
+
+  function showToast(msg) {
+    $toast.textContent = msg;
+    $toast.classList.add('show');
+    setTimeout(function() { $toast.classList.remove('show'); }, 2000);
+  }
 
   function closePeek() {
     var old = document.querySelector('.peek');
     if (old) old.remove();
     var bd = document.querySelector('.peek-backdrop');
     if (bd) bd.remove();
-    peekEntry = null;
+    state.peekEntry = null;
   }
 
   function openPeek(e, anchor) {
     closePeek();
-    peekEntry = e;
+    state.peekEntry = e;
 
-    // Build popover content via DOM
     var children = [];
     if (e.branch && e.branch !== 'main') {
       children.push(el('div', {className: 'peek-branch truncate'}, e.branch));
@@ -731,15 +733,12 @@
       el('button', {className: 'btn-resume', dataset: {cwd: e.cwd, session: e.session}}, 'resume')
     ));
 
-    // Create backdrop
     var bd = el('div', {className: 'peek-backdrop', onclick: closePeek});
     document.body.appendChild(bd);
 
-    // Create popover
     var pop = el('div', {className: 'peek'}, children);
     document.body.appendChild(pop);
 
-    // Position below anchor, flip above if near bottom, clamp to viewport
     var rect = anchor.getBoundingClientRect();
     var top = rect.bottom + window.scrollY + 6;
     var left = rect.left + window.scrollX;
@@ -752,198 +751,214 @@
     pop.style.left = left + 'px';
   }
 
-  function worktreeTag(cwd) {
-    var m = cwd.match(/\/.claude\/worktrees\/(.+)$/);
-    return m ? el('span', {className: 'wt-tag'}, m[1]) : null;
-  }
-
-  function todayStr() { return new Date().toISOString().split('T')[0]; }
-  function yesterdayStr() { var d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; }
-
-  function dateLabel(ds) {
-    if (ds === todayStr()) return 'Today';
-    if (ds === yesterdayStr()) return 'Yesterday';
-    return new Date(ds + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-  }
-
-  function dateTag(ds) {
-    if (ds === todayStr()) return 'today';
-    if (ds === yesterdayStr()) return 'recent';
-    return 'older';
-  }
-
   function updateGreeting() {
-    var h = new Date().getHours();
-    var greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    var clockStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    var g = document.getElementById('greeting');
-    g.textContent = '';
-    g.appendChild(el('span', {className: 'clock'}, clockStr));
-    g.appendChild(document.createTextNode(' '));
-    if (entries.length === 0) {
-      g.appendChild(document.createTextNode(greet + ' \u2014 no sessions logged yet.'));
-      return;
+    try {
+      var h = new Date().getHours();
+      var greet = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+      var clockStr = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      $greeting.textContent = '';
+      $greeting.appendChild(el('span', {className: 'clock'}, clockStr));
+      $greeting.appendChild(document.createTextNode(' '));
+      if (state.entries.length === 0) {
+        $greeting.appendChild(document.createTextNode(greet + ' \u2014 no sessions logged yet.'));
+        return;
+      }
+      var last = state.entries.find(function(e) { return e.response !== null; }) || state.entries[0];
+      $greeting.appendChild(el('span', {className: 'context'},
+        greet + ' \u2014 last in ',
+        el('span', {className: 'context-project'}, last.project),
+        ' ' + relTime(last.ts)
+      ));
+    } catch (err) {
+      console.error('[claude-activity] greeting error:', err);
     }
-    var last = entries.find(function(e) { return e.response !== null; }) || entries[0];
-    g.appendChild(el('span', {className: 'context'},
-      greet + ' \u2014 last in ',
-      el('span', {className: 'context-project'}, last.project),
-      ' ' + relTime(last.ts)
-    ));
   }
 
-  function saveState() {
-    var active = [];
-    document.querySelectorAll('.pill.active').forEach(function(p) { active.push(p.dataset.filter); });
-    sessionStorage.setItem('cf', JSON.stringify(active));
-    sessionStorage.setItem('cs', document.getElementById('search').value || '');
-    sessionStorage.setItem('cv', currentView);
-  }
-
-  function restoreState() {
-    var sv = sessionStorage.getItem('cv');
-    if (sv) currentView = sv;
-    document.querySelectorAll('.view-toggle button').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.view === currentView);
-    });
-    var ss = sessionStorage.getItem('cs');
-    if (ss) document.getElementById('search').value = ss;
-    var sf = sessionStorage.getItem('cf');
-    if (sf) {
-      var filters = JSON.parse(sf);
-      document.querySelectorAll('.pill').forEach(function(p) {
-        p.classList.toggle('active', filters.indexOf(p.dataset.filter) !== -1);
+  function showRestoreDialog() {
+    var hidden = getHidden();
+    $restoreList.textContent = '';
+    if (hidden.length === 0) {
+      $restoreList.appendChild(el('li', {style: {color: 'var(--text-muted)', fontSize: '12px', padding: '8px 0'}}, 'No hidden projects'));
+    } else {
+      hidden.forEach(function(name) {
+        $restoreList.appendChild(el('li', {className: 'restore-item'},
+          el('span', null, name),
+          el('button', {className: 'btn-unhide', onclick: function() { unhideProject(name); showRestoreDialog(); }}, 'unhide')
+        ));
       });
-      if (!document.querySelector('.pill.active'))
-        document.querySelector('[data-filter="all"]').classList.add('active');
     }
+    $unhideAll.style.display = hidden.length > 1 ? '' : 'none';
+    $restoreOverlay.classList.add('show');
   }
 
   function render() {
-    var COLORS = THEME_COLORS[currentTheme] || THEME_COLORS['tokyo-night'];
-    var S_COLORS = SESSION_COLORS[currentTheme] || SESSION_COLORS['tokyo-night'];
-    var hidden = getHidden();
-    var visibleEntries = entries.filter(function(e) { return hidden.indexOf(e.project) === -1; });
+    try {
+      var COLORS = THEME_COLORS[state.theme] || THEME_COLORS['tokyo-night'];
+      var S_COLORS = SESSION_COLORS[state.theme] || SESSION_COLORS['tokyo-night'];
+      var hidden = getHidden();
+      var visibleEntries = state.entries.filter(function(e) { return hidden.indexOf(e.project) === -1; });
 
-    var projects = [];
-    var seen = {};
-    visibleEntries.forEach(function(e) { if (!seen[e.project]) { seen[e.project] = 1; projects.push(e.project); } });
-    projectColors = {};
-    projects.forEach(function(p, i) { projectColors[p] = COLORS[i % COLORS.length]; });
+      var projects = [];
+      var seen = {};
+      visibleEntries.forEach(function(e) { if (!seen[e.project]) { seen[e.project] = 1; projects.push(e.project); } });
+      state.projectColors = {};
+      projects.forEach(function(p, i) { state.projectColors[p] = COLORS[i % COLORS.length]; });
 
-    sessionColors = {};
-    visibleEntries.forEach(function(e) {
-      if (!sessionColors[e.session]) sessionColors[e.session] = S_COLORS[hashStr(e.session) % S_COLORS.length];
-    });
+      state.sessionColors = {};
+      visibleEntries.forEach(function(e) {
+        if (!state.sessionColors[e.session]) state.sessionColors[e.session] = S_COLORS[hashStr(e.session) % S_COLORS.length];
+      });
 
-    document.getElementById('meta').textContent =
-      projects.length + ' projects \u00b7 ' + visibleEntries.length + ' prompts';
+      $meta.textContent = projects.length + ' projects \u00b7 ' + visibleEntries.length + ' prompts';
 
-    updateGreeting();
+      updateGreeting();
 
-    var bar = document.getElementById('filter-bar');
-    bar.querySelectorAll('.pill:not([data-filter="all"])').forEach(function(p) { p.remove(); });
-    var counts = {};
-    visibleEntries.forEach(function(e) { counts[e.project] = (counts[e.project] || 0) + 1; });
-    projects.sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); });
-    projects.forEach(function(proj) {
-      var btn = el('button', {className: 'pill', dataset: {filter: proj}, onclick: onPillClick},
-        proj, el('span', {className: 'badge'}, '' + counts[proj])
-      );
-      btn.style.setProperty('--pill-color', projectColors[proj]);
-      bar.appendChild(btn);
-    });
+      // Filter pills
+      $filterBar.querySelectorAll('.pill:not([data-filter="all"])').forEach(function(p) { p.remove(); });
+      var counts = {};
+      visibleEntries.forEach(function(e) { counts[e.project] = (counts[e.project] || 0) + 1; });
+      projects.sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); });
+      projects.forEach(function(proj) {
+        var btn = el('button', {className: 'pill', dataset: {filter: proj}, onclick: onPillClick},
+          proj, el('span', {className: 'badge'}, '' + counts[proj])
+        );
+        btn.style.setProperty('--pill-color', state.projectColors[proj]);
+        $filterBar.appendChild(btn);
+      });
 
-    var lt = document.getElementById('last-touched');
-    lt.querySelectorAll('.lt-entry').forEach(function(e) { e.remove(); });
-    var ltHeader = lt.querySelector('.lt-header');
-    var oldHiddenCount = ltHeader.querySelector('.lt-hidden-count');
-    if (oldHiddenCount) oldHiddenCount.remove();
-    if (hidden.length > 0) {
-      ltHeader.appendChild(el('span', {className: 'lt-hidden-count', onclick: showRestoreDialog}, hidden.length + ' hidden'));
-    }
-    var ltSeen = {};
-    visibleEntries.forEach(function(e) {
-      if (ltSeen[e.project]) return;
-      ltSeen[e.project] = true;
-      var ip = e.response === null;
-      var st = ip && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
-      var agoCls = 'lt-ago' + (st ? ' stale' : ip ? ' in-progress' : '');
-      var agoTxt = ip && !st ? 'now' : relTime(e.ts);
-      var row = el('div', {className: 'lt-entry', dataset: {project: e.project}},
-        el('span', {className: 'lt-project truncate', style: {color: projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
-        el('span', {className: agoCls}, agoTxt),
-        el('span', {className: 'lt-prompt truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 80)),
-        el('button', {className: 'btn-dismiss', dataset: {project: e.project}, title: 'Hide project'}, '\u00d7'),
-        el('button', {className: 'btn-resume', dataset: {cwd: e.cwd, session: e.session}}, 'resume')
-      );
-      row._entry = e;
-      lt.appendChild(row);
-    });
-
-    var timeline = document.getElementById('timeline');
-    timeline.textContent = '';
-
-    if (visibleEntries.length === 0) {
-      var emptyEl = el('div', {className: 'empty-state'},
-        el('div', {style: {fontSize: '32px', marginBottom: '12px', opacity: '0.5'}}, '>_'),
-        el('h2', null, 'Your activity timeline will appear here'),
-        el('p', null, 'Prompts and responses are logged as you work across projects.'),
-        el('p', {style: {fontSize: '12px', color: 'var(--text-muted)'}},
-          'Reopen anytime with ',
-          el('code', {style: {fontFamily: 'var(--font-mono)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: '3px'}}, '/claude-activity:dashboard')
-        ),
-        hidden.length > 0 ? el('span', {className: 'action', onclick: function() { document.getElementById('restore-overlay').classList.add('show'); }}, hidden.length + ' projects hidden \u2014 restore?') : null
-      );
-      timeline.appendChild(emptyEl);
-      return;
-    }
-
-    var byDate = {};
-    visibleEntries.forEach(function(e) { var d = e.ts.split('T')[0]; (byDate[d] = byDate[d] || []).push(e); });
-    var todayHasEntries = !!byDate[todayStr()];
-
-    Object.keys(byDate).sort().reverse().forEach(function(date) {
-      var group = el('div', {className: 'day-group', dataset: {date: dateTag(date)}});
-      var header = el('div', {className: 'day-header'},
-        dateLabel(date), el('span', {className: 'count'}, byDate[date].length + ' prompts')
-      );
-      group.appendChild(header);
-
-      byDate[date].forEach(function(e) {
-        var isInProgress = e.response === null;
-        var isStale = isInProgress && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
-        var timeStr = isInProgress && !isStale ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
-        var cls = 'entry' + (isStale ? ' stale' : isInProgress ? ' in-progress' : '');
-        var durStr = formatDuration(e.duration_s);
-        var row = el('div', {className: cls, dataset: {project: e.project, session: e.session, cwd: e.cwd}},
-          el('span', {className: 'time'}, timeStr),
-          el('span', {className: 'project truncate', style: {color: projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
-          el('span', {className: 'prompt-text truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 120)),
-          durStr ? el('span', {className: 'badge-duration'}, durStr) : el('span'),
+      // Last Touched
+      $lastTouched.querySelectorAll('.lt-entry').forEach(function(e) { e.remove(); });
+      var oldHiddenCount = $ltHeader.querySelector('.lt-hidden-count');
+      if (oldHiddenCount) oldHiddenCount.remove();
+      if (hidden.length > 0) {
+        $ltHeader.appendChild(el('span', {className: 'lt-hidden-count', onclick: showRestoreDialog}, hidden.length + ' hidden'));
+      }
+      var ltSeen = {};
+      visibleEntries.forEach(function(e) {
+        if (ltSeen[e.project]) return;
+        ltSeen[e.project] = true;
+        var ip = e.response === null;
+        var st = ip && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
+        var agoCls = 'lt-ago' + (st ? ' stale' : ip ? ' in-progress' : '');
+        var agoTxt = ip && !st ? 'now' : relTime(e.ts);
+        var row = el('div', {className: 'lt-entry', dataset: {project: e.project}},
+          el('span', {className: 'lt-project truncate', style: {color: state.projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
+          el('span', {className: agoCls}, agoTxt),
+          el('span', {className: 'lt-prompt truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 80)),
+          el('button', {className: 'btn-dismiss', dataset: {project: e.project}, title: 'Hide project'}, '\u00d7'),
           el('button', {className: 'btn-resume', dataset: {cwd: e.cwd, session: e.session}}, 'resume')
         );
-        row.style.setProperty('--session-color', sessionColors[e.session] || 'transparent');
         row._entry = e;
-        group.appendChild(row);
+        $lastTouched.appendChild(row);
       });
-      timeline.appendChild(group);
-    });
 
-    if (!todayHasEntries) {
-      var switchAction = el('span', {className: 'action', id: 'switch-to-week', onclick: function() {
-        currentView = 'week';
-        document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'week'); });
-        applyFilters();
-      }}, 'Show last 7 days');
-      var emptyToday = el('div', {className: 'day-group', dataset: {date: 'today'}},
-        el('div', {className: 'day-header'}, 'Today', el('span', {className: 'count'}, '0 prompts')),
-        el('div', {className: 'empty-state'}, el('p', null, 'No sessions today yet.'), switchAction)
-      );
-      timeline.insertBefore(emptyToday, timeline.firstChild);
+      // Timeline
+      $timeline.textContent = '';
+
+      if (visibleEntries.length === 0) {
+        $timeline.appendChild(el('div', {className: 'empty-state'},
+          el('div', {style: {fontSize: '32px', marginBottom: '12px', opacity: '0.5'}}, '>_'),
+          el('h2', null, 'Your activity timeline will appear here'),
+          el('p', null, 'Prompts and responses are logged as you work across projects.'),
+          el('p', {style: {fontSize: '12px', color: 'var(--text-muted)'}},
+            'Reopen anytime with ',
+            el('code', {style: {fontFamily: 'var(--font-mono)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: '3px'}}, '/claude-activity:dashboard')
+          ),
+          hidden.length > 0 ? el('span', {className: 'action', onclick: function() { $restoreOverlay.classList.add('show'); }}, hidden.length + ' projects hidden \u2014 restore?') : null
+        ));
+        return;
+      }
+
+      var byDate = {};
+      visibleEntries.forEach(function(e) { var d = e.ts.split('T')[0]; (byDate[d] = byDate[d] || []).push(e); });
+      var todayHasEntries = !!byDate[todayStr()];
+
+      Object.keys(byDate).sort().reverse().forEach(function(date) {
+        var group = el('div', {className: 'day-group', dataset: {date: dateTag(date)}});
+        group.appendChild(el('div', {className: 'day-header'},
+          dateLabel(date), el('span', {className: 'count'}, byDate[date].length + ' prompts')
+        ));
+
+        byDate[date].forEach(function(e) {
+          var isInProgress = e.response === null;
+          var isStale = isInProgress && (Date.now() - new Date(e.ts).getTime()) > STALE_MS;
+          var timeStr = isInProgress && !isStale ? 'now' : e.ts.split('T')[1].split(':').slice(0, 2).join(':');
+          var cls = 'entry' + (isStale ? ' stale' : isInProgress ? ' in-progress' : '');
+          var durStr = formatDuration(e.duration_s);
+          var row = el('div', {className: cls, dataset: {project: e.project, session: e.session, cwd: e.cwd}},
+            el('span', {className: 'time'}, timeStr),
+            el('span', {className: 'project truncate', style: {color: state.projectColors[e.project]}}, e.project, worktreeTag(e.cwd)),
+            el('span', {className: 'prompt-text truncate', style: {cursor: 'pointer'}}, highlightVerbTruncated(e.prompt, 120)),
+            durStr ? el('span', {className: 'badge-duration'}, durStr) : el('span'),
+            el('button', {className: 'btn-resume', dataset: {cwd: e.cwd, session: e.session}}, 'resume')
+          );
+          row.style.setProperty('--session-color', state.sessionColors[e.session] || 'transparent');
+          row._entry = e;
+          group.appendChild(row);
+        });
+        $timeline.appendChild(group);
+      });
+
+      if (!todayHasEntries) {
+        var switchAction = el('span', {className: 'action', id: 'switch-to-week', onclick: function() {
+          state.view = 'week';
+          document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'week'); });
+          applyFilters();
+        }}, 'Show last 7 days');
+        $timeline.insertBefore(
+          el('div', {className: 'day-group', dataset: {date: 'today'}},
+            el('div', {className: 'day-header'}, 'Today', el('span', {className: 'count'}, '0 prompts')),
+            el('div', {className: 'empty-state'}, el('p', null, 'No sessions today yet.'), switchAction)
+          ),
+          $timeline.firstChild
+        );
+      }
+
+      restoreState();
+      applyFilters();
+    } catch (err) {
+      console.error('[claude-activity] render error:', err);
     }
+  }
 
-    restoreState();
+  // ======== INTERACTION ========
+
+  function setTheme(name) {
+    state.theme = name;
+    document.documentElement.setAttribute('data-theme', name);
+    localStorage.setItem('ca-theme', name);
+    document.querySelectorAll('.theme-option').forEach(function(o) {
+      o.classList.toggle('active', o.dataset.theme === name);
+    });
+    if (state.entries.length > 0) render();
+  }
+
+  function hideProject(name) {
+    var h = getHidden();
+    if (h.indexOf(name) === -1) { h.push(name); setHidden(h); }
+    closePeek();
+    render();
+    showToast(name + ' hidden');
+  }
+
+  function unhideProject(name) {
+    setHidden(getHidden().filter(function(p) { return p !== name; }));
+    closePeek();
+    render();
+  }
+
+  function unhideAll() { closePeek(); setHidden([]); render(); }
+
+  function onPillClick() {
+    if (this.dataset.filter === 'all') {
+      document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+    } else {
+      $pillAll.classList.remove('active');
+      this.classList.toggle('active');
+      if (!document.querySelector('.pill.active'))
+        $pillAll.classList.add('active');
+    }
     applyFilters();
   }
 
@@ -951,23 +966,52 @@
     var active = [];
     document.querySelectorAll('.pill.active').forEach(function(p) { active.push(p.dataset.filter); });
     var showAll = active.indexOf('all') !== -1;
-    var q = (document.getElementById('search').value || '').toLowerCase();
+    var q = ($search.value || '').toLowerCase();
 
-    document.querySelectorAll('.entry[data-project]').forEach(function(el) {
-      var mp = showAll || active.indexOf(el.dataset.project) !== -1;
-      var text = (el.querySelector('.prompt-text') || {}).textContent || '';
-      el.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
+    document.querySelectorAll('.entry[data-project]').forEach(function(node) {
+      var mp = showAll || active.indexOf(node.dataset.project) !== -1;
+      var text = (node.querySelector('.prompt-text') || {}).textContent || '';
+      node.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
     });
-    document.querySelectorAll('.lt-entry[data-project]').forEach(function(el) {
-      var mp = showAll || active.indexOf(el.dataset.project) !== -1;
-      var text = (el.querySelector('.lt-prompt') || {}).textContent || '';
-      el.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
+    document.querySelectorAll('.lt-entry[data-project]').forEach(function(node) {
+      var mp = showAll || active.indexOf(node.dataset.project) !== -1;
+      var text = (node.querySelector('.lt-prompt') || {}).textContent || '';
+      node.classList.toggle('hidden', !(mp && (!q || text.toLowerCase().indexOf(q) !== -1)));
     });
     document.querySelectorAll('.day-group').forEach(function(g) {
       var vis = g.querySelector('.entry:not(.hidden)') || g.querySelector('.empty-state');
-      g.classList.toggle('hidden', !vis || (currentView === 'today' && g.dataset.date !== 'today'));
+      g.classList.toggle('hidden', !vis || (state.view === 'today' && g.dataset.date !== 'today'));
     });
-    saveState(); focusedIdx = -1; clearFocus();
+    saveState();
+    state.focusedIdx = -1;
+    clearFocus();
+  }
+
+  function saveState() {
+    var active = [];
+    document.querySelectorAll('.pill.active').forEach(function(p) { active.push(p.dataset.filter); });
+    sessionStorage.setItem('cf', JSON.stringify(active));
+    sessionStorage.setItem('cs', $search.value || '');
+    sessionStorage.setItem('cv', state.view);
+  }
+
+  function restoreState() {
+    var sv = sessionStorage.getItem('cv');
+    if (sv) state.view = sv;
+    document.querySelectorAll('.view-toggle button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.view === state.view);
+    });
+    var ss = sessionStorage.getItem('cs');
+    if (ss) $search.value = ss;
+    var sf = sessionStorage.getItem('cf');
+    if (sf) {
+      var filters = JSON.parse(sf);
+      document.querySelectorAll('.pill').forEach(function(p) {
+        p.classList.toggle('active', filters.indexOf(p.dataset.filter) !== -1);
+      });
+      if (!document.querySelector('.pill.active'))
+        $pillAll.classList.add('active');
+    }
   }
 
   function getVisibleEntries() { return Array.from(document.querySelectorAll('.entry:not(.hidden)')); }
@@ -977,89 +1021,62 @@
     var visible = getVisibleEntries();
     if (visible.length === 0) return;
     clearFocus();
-    focusedIdx = Math.max(0, Math.min(idx, visible.length - 1));
-    visible[focusedIdx].classList.add('focused');
-    visible[focusedIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    state.focusedIdx = Math.max(0, Math.min(idx, visible.length - 1));
+    visible[state.focusedIdx].classList.add('focused');
+    visible[state.focusedIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 
-  function isInputFocused() { var t = (document.activeElement || {}).tagName; return t === 'INPUT' || t === 'TEXTAREA'; }
+  function load() {
+    state.entries = (window.ACTIVITY_DATA || []).map(fixProject);
+    render();
+  }
 
-  window.addEventListener('scroll', function(e) {
-    if (peekEntry && (e.target === document || e.target === document.documentElement)) closePeek();
-  }, true);
+  function reload() {
+    var old = document.getElementById('activity-script');
+    if (old) old.remove();
+    var s = document.createElement('script');
+    s.id = 'activity-script';
+    s.src = 'activity.js?' + Date.now();
+    s.onload = load;
+    document.head.appendChild(s);
+  }
 
-  document.addEventListener('keydown', function(e) {
-    if (peekEntry && e.key === 'Escape') { closePeek(); e.preventDefault(); return; }
-    var restoreOverlay = document.getElementById('restore-overlay');
-    if (restoreOverlay.classList.contains('show')) {
-      if (e.key === 'Escape') { restoreOverlay.classList.remove('show'); e.preventDefault(); }
-      return;
-    }
-    var overlay = document.getElementById('kb-overlay');
-    if (overlay.classList.contains('show')) {
-      if (e.key === 'Escape' || e.key === '?') { overlay.classList.remove('show'); e.preventDefault(); }
-      return;
-    }
-    if (isInputFocused()) {
-      if (e.key === 'Escape') { document.activeElement.blur(); document.getElementById('search').value = ''; applyFilters(); e.preventDefault(); }
-      return;
-    }
-    switch (e.key) {
-      case 'j': focusEntry(focusedIdx + 1); e.preventDefault(); break;
-      case 'k': focusEntry(focusedIdx - 1); e.preventDefault(); break;
-      case '/': document.getElementById('search').focus(); e.preventDefault(); break;
-      case 'Escape':
-        document.getElementById('search').value = '';
-        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
-        document.querySelector('[data-filter="all"]').classList.add('active');
-        applyFilters(); break;
-      case 't': currentView = 'today'; document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'today'); }); applyFilters(); break;
-      case 'w': currentView = 'week'; document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'week'); }); applyFilters(); break;
-      case 'r': var f = document.querySelector('.entry.focused'); if (f) { var b = f.querySelector('.btn-resume'); if (b) b.click(); } break;
-      case '?': overlay.classList.add('show'); e.preventDefault(); break;
-      case '0':
-        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
-        document.querySelector('[data-filter="all"]').classList.add('active'); applyFilters(); break;
-      default:
-        if (e.key >= '1' && e.key <= '9') {
-          var pills = document.querySelectorAll('.pill:not([data-filter="all"])');
-          var idx = parseInt(e.key) - 1;
-          if (idx < pills.length) {
-            document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
-            pills[idx].classList.add('active'); applyFilters();
-          }
-        }
-    }
+  // ======== INIT ========
+
+  setTheme(state.theme);
+
+  // Theme picker
+  $themeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    $themeMenu.classList.toggle('show');
+  });
+  document.addEventListener('click', function() { $themeMenu.classList.remove('show'); });
+  document.querySelectorAll('.theme-option').forEach(function(opt) {
+    opt.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setTheme(this.dataset.theme);
+      $themeMenu.classList.remove('show');
+    });
   });
 
-  function onPillClick() {
-    if (this.dataset.filter === 'all') {
-      document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
-      this.classList.add('active');
-    } else {
-      document.querySelector('[data-filter="all"]').classList.remove('active');
-      this.classList.toggle('active');
-      if (!document.querySelector('.pill.active'))
-        document.querySelector('[data-filter="all"]').classList.add('active');
-    }
-    applyFilters();
-  }
-
-  document.querySelector('[data-filter="all"]').addEventListener('click', onPillClick);
-  document.getElementById('search').addEventListener('input', applyFilters);
+  // Filters and view
+  $pillAll.addEventListener('click', onPillClick);
+  $search.addEventListener('input', applyFilters);
   document.querySelectorAll('.view-toggle button').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.remove('active'); });
-      this.classList.add('active'); currentView = this.dataset.view; applyFilters();
+      this.classList.add('active');
+      state.view = this.dataset.view;
+      applyFilters();
     });
   });
-  document.getElementById('kb-overlay').addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
-  document.getElementById('restore-overlay').addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
-  document.getElementById('btn-unhide-all').addEventListener('click', function() {
-    unhideAll();
-    document.getElementById('restore-overlay').classList.remove('show');
-  });
 
+  // Overlays
+  $kbOverlay.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
+  $restoreOverlay.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
+  $unhideAll.addEventListener('click', function() { unhideAll(); $restoreOverlay.classList.remove('show'); });
+
+  // Delegated clicks: dismiss, resume, peek
   document.addEventListener('click', function(e) {
     var dismiss = e.target.closest('.btn-dismiss');
     if (dismiss) { e.stopPropagation(); hideProject(dismiss.dataset.project); return; }
@@ -1078,50 +1095,78 @@
     if (row && row._entry) { openPeek(row._entry, row); return; }
   });
 
-  // -- Session hover-highlight --
-  var hoverTimeout;
-  document.getElementById('timeline').addEventListener('mouseenter', function(e) {
+  // Keyboard shortcuts
+  window.addEventListener('scroll', function(e) {
+    if (state.peekEntry && (e.target === document || e.target === document.documentElement)) closePeek();
+  }, true);
+
+  document.addEventListener('keydown', function(e) {
+    if (state.peekEntry && e.key === 'Escape') { closePeek(); e.preventDefault(); return; }
+    if ($restoreOverlay.classList.contains('show')) {
+      if (e.key === 'Escape') { $restoreOverlay.classList.remove('show'); e.preventDefault(); }
+      return;
+    }
+    if ($kbOverlay.classList.contains('show')) {
+      if (e.key === 'Escape' || e.key === '?') { $kbOverlay.classList.remove('show'); e.preventDefault(); }
+      return;
+    }
+    if (isInputFocused()) {
+      if (e.key === 'Escape') { document.activeElement.blur(); $search.value = ''; applyFilters(); e.preventDefault(); }
+      return;
+    }
+    switch (e.key) {
+      case 'j': focusEntry(state.focusedIdx + 1); e.preventDefault(); break;
+      case 'k': focusEntry(state.focusedIdx - 1); e.preventDefault(); break;
+      case '/': $search.focus(); e.preventDefault(); break;
+      case 'Escape':
+        $search.value = '';
+        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+        $pillAll.classList.add('active');
+        applyFilters(); break;
+      case 't': state.view = 'today'; document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'today'); }); applyFilters(); break;
+      case 'w': state.view = 'week'; document.querySelectorAll('.view-toggle button').forEach(function(b) { b.classList.toggle('active', b.dataset.view === 'week'); }); applyFilters(); break;
+      case 'r': var f = document.querySelector('.entry.focused'); if (f) { var b = f.querySelector('.btn-resume'); if (b) b.click(); } break;
+      case '?': $kbOverlay.classList.add('show'); e.preventDefault(); break;
+      case '0':
+        document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+        $pillAll.classList.add('active'); applyFilters(); break;
+      default:
+        if (e.key >= '1' && e.key <= '9') {
+          var pills = document.querySelectorAll('.pill:not([data-filter="all"])');
+          var idx = parseInt(e.key) - 1;
+          if (idx < pills.length) {
+            document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+            pills[idx].classList.add('active'); applyFilters();
+          }
+        }
+    }
+  });
+
+  // Session hover-highlight
+  $timeline.addEventListener('mouseenter', function(e) {
     var entry = e.target.closest('.entry[data-session]');
     if (!entry) return;
-    clearTimeout(hoverTimeout);
+    clearTimeout(state.hoverTimeout);
     var sid = entry.dataset.session;
-    var timeline = document.getElementById('timeline');
-    timeline.classList.add('timeline-hover');
-    timeline.querySelectorAll('.entry[data-session]').forEach(function(el) {
-      el.classList.toggle('session-highlight', el.dataset.session === sid);
+    $timeline.classList.add('timeline-hover');
+    $timeline.querySelectorAll('.entry[data-session]').forEach(function(node) {
+      node.classList.toggle('session-highlight', node.dataset.session === sid);
     });
   }, true);
-  document.getElementById('timeline').addEventListener('mouseleave', function(e) {
+
+  $timeline.addEventListener('mouseleave', function(e) {
     var entry = e.target.closest('.entry[data-session]');
     if (!entry) return;
-    var timeline = document.getElementById('timeline');
-    hoverTimeout = setTimeout(function() {
-      if (peekEntry || timeline.querySelector('.entry:hover')) return;
-      timeline.classList.remove('timeline-hover');
-      timeline.querySelectorAll('.session-highlight').forEach(function(el) {
-        el.classList.remove('session-highlight');
+    state.hoverTimeout = setTimeout(function() {
+      if (state.peekEntry || $timeline.querySelector('.entry:hover')) return;
+      $timeline.classList.remove('timeline-hover');
+      $timeline.querySelectorAll('.session-highlight').forEach(function(node) {
+        node.classList.remove('session-highlight');
       });
     }, 50);
   }, true);
 
-  function showToast(msg) {
-    var toast = document.getElementById('toast');
-    toast.textContent = msg; toast.classList.add('show');
-    setTimeout(function() { toast.classList.remove('show'); }, 2000);
-  }
-
-  function fixProject(e) { var m = e.cwd.match(/^(.+)\/.claude\/worktrees\//); if (m) e.project = m[1].split('/').pop(); return e; }
-
-  function load() { entries = (window.ACTIVITY_DATA || []).map(fixProject); render(); }
-
-  function reload() {
-    var old = document.getElementById('activity-script');
-    if (old) old.remove();
-    var s = document.createElement('script');
-    s.id = 'activity-script'; s.src = 'activity.js?' + Date.now();
-    s.onload = load; document.head.appendChild(s);
-  }
-
+  // Start
   load();
   setInterval(reload, REFRESH_MS);
   setInterval(updateGreeting, 60000);
