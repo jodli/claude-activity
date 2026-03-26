@@ -13,10 +13,16 @@ STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
 [ "$STOP_HOOK_ACTIVE" = "true" ] && exit 0
 
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // empty')
 
 [ -z "$SESSION_ID" ] && exit 0
+
+# Project opt-out
+if should_skip_project "$CWD"; then
+  exit 0
+fi
 
 # --- Process response text ---
 

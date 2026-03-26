@@ -12,6 +12,12 @@ PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
+# Project opt-out
+if should_skip_project "$CWD"; then
+  log_hook "skip: .claude-activity-ignore in $CWD"
+  exit 0
+fi
+
 # Noise filtering (carried from v0.4)
 [ -z "$PROMPT" ] && exit 0
 echo "$PROMPT" | grep -q '^<task-notification>' && exit 0

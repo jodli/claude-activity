@@ -2,7 +2,10 @@
 # lib-activity.sh — shared library for claude-activity hook scripts
 # Source this file, don't execute it directly.
 
+umask 077
+
 DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.claude}"
+chmod 700 "$DATA_DIR" 2>/dev/null
 ACTIVITY_JS="$DATA_DIR/activity.js"
 LOCK_DIR="$DATA_DIR/.activity-lock"
 LOCK_PID="$LOCK_DIR/pid"
@@ -102,4 +105,14 @@ copy_dashboard() {
   if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dashboard.html" ]; then
     cp -u "$CLAUDE_PLUGIN_ROOT/dashboard.html" "$DATA_DIR/dashboard.html" 2>/dev/null
   fi
+}
+
+# --- Project opt-out ---
+
+should_skip_project() {
+  local cwd="$1"
+  [ -z "$cwd" ] && return 1
+  # Resolve worktree path to original project root
+  local project_root="${cwd%%/.claude/worktrees/*}"
+  [ -f "$project_root/.claude-activity-ignore" ]
 }

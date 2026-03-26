@@ -1122,7 +1122,7 @@
     var btn = e.target.closest('.btn-resume');
     if (btn) {
       e.stopPropagation();
-      var cmd = 'cd ' + btn.dataset.cwd + ' && claude --resume ' + btn.dataset.session;
+      var cmd = 'cd "' + btn.dataset.cwd.replace(/"/g, '\\"') + '" && claude --resume "' + btn.dataset.session.replace(/"/g, '\\"') + '"';
       navigator.clipboard.writeText(cmd).then(function() {
         btn.classList.add('copied'); btn.textContent = 'copied!';
         showToast('Copied: ' + cmd);
