@@ -6,7 +6,7 @@ The problem: you work across multiple projects, have a meeting, come back, and c
 
 ## What it looks like
 
-![Session hover-highlight showing two concurrent web-app sessions](assets/session-hover-highlight.gif)
+![Dashboard demo: filter, session hover, peek popover](assets/dashboard-demo.gif)
 
 The dashboard shows:
 
