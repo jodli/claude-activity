@@ -395,6 +395,12 @@
   }
   .empty-state .action:hover { color: var(--cyan); }
 
+  .no-results { text-align: center; padding: 24px 20px; color: var(--text-muted); font-size: 13px; }
+  .no-results .action { font-family: var(--font-mono); font-size: 12px; color: var(--accent); cursor: pointer; margin-left: 4px; }
+  .no-results .action:hover { color: var(--cyan); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .toast {
     position: fixed; bottom: 24px; right: 24px;
     background: var(--bg-surface); border: 1px solid var(--green);
@@ -443,7 +449,7 @@
   <h1><span class="caret">&gt;</span> Claude Activity</h1>
   <div class="header-right">
     <div class="theme-picker">
-      <button class="theme-btn" id="theme-btn" title="Theme">&#9681;</button>
+      <button class="theme-btn" id="theme-btn" title="Theme" aria-expanded="false">&#9681;</button>
       <div class="theme-menu" id="theme-menu">
         <button class="theme-option" data-theme="tokyo-night"><span class="theme-swatch" style="background:#1a1b26"></span>Tokyo Night<span class="theme-label">dark</span></button>
         <button class="theme-option" data-theme="catppuccin-mocha"><span class="theme-swatch" style="background:#1e1e2e"></span>Catppuccin Mocha<span class="theme-label">dark</span></button>
@@ -464,7 +470,7 @@
 <div class="greeting" id="greeting"></div>
 
 <div class="filter-bar" id="filter-bar">
-  <input type="search" class="search-box" id="search" placeholder="Search prompts...">
+  <input type="search" class="search-box" id="search" placeholder="Search prompts..." aria-label="Search prompts">
   <span class="search-hint">/</span>
   <div class="filter-sep"></div>
   <button class="pill active" data-filter="all" style="--pill-color: var(--text-dim)">All</button>
@@ -478,7 +484,7 @@
 
 <main id="timeline"></main>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" aria-live="polite"></div>
 
 <div class="kb-overlay" id="kb-overlay">
   <div class="kb-box">
@@ -510,6 +516,7 @@
 
   // ======== CONSTANTS ========
 
+  var VERSION = '0.8.0';
   var THEME_COLORS = {
     'tokyo-night':       ['#7dcfff','#bb9af7','#9ece6a','#e0af68','#7aa2f7','#f7768e','#73daca','#ff9e64'],
     'catppuccin-mocha':  ['#89dceb','#cba6f7','#a6e3a1','#fab387','#89b4fa','#f38ba8','#94e2d5','#f9e2af'],
@@ -545,10 +552,11 @@
     projectColors: {},
     sessionColors: {},
     view: 'today',
-    theme: localStorage.getItem('ca-theme') || 'tokyo-night',
+    theme: localStorage.getItem('ca-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'catppuccin-latte' : 'tokyo-night'),
     focusedIdx: -1,
     peekEntry: null,
-    hoverTimeout: null
+    hoverTimeout: null,
+    lastDigest: null
   };
 
   // ======== DOM REFS ========
@@ -809,7 +817,11 @@
         if (!state.sessionColors[e.session]) state.sessionColors[e.session] = S_COLORS[hashStr(e.session) % S_COLORS.length];
       });
 
-      $meta.textContent = projects.length + ' projects \u00b7 ' + visibleEntries.length + ' prompts';
+      $meta.textContent = projects.length + ' projects \u00b7 ' + visibleEntries.length + ' prompts \u00b7 v' + VERSION;
+
+      // Dynamic page title
+      var todayCount = visibleEntries.filter(function(e) { return e.ts.split('T')[0] === todayStr(); }).length;
+      document.title = todayCount > 0 ? 'Claude Activity (' + todayCount + ' today)' : 'Claude Activity';
 
       updateGreeting();
 
@@ -982,6 +994,23 @@
       var vis = g.querySelector('.entry:not(.hidden)') || g.querySelector('.empty-state');
       g.classList.toggle('hidden', !vis || (state.view === 'today' && g.dataset.date !== 'today'));
     });
+    // No-results state (distinct from empty state)
+    var noResults = $timeline.querySelector('.no-results');
+    if (noResults) noResults.remove();
+    var hasVisible = $timeline.querySelector('.entry:not(.hidden)');
+    var hasEntries = $timeline.querySelector('.entry');
+    if (hasEntries && !hasVisible) {
+      $timeline.appendChild(el('div', {className: 'no-results'},
+        'No matching entries.',
+        el('span', {className: 'action', onclick: function() {
+          $search.value = '';
+          document.querySelectorAll('.pill').forEach(function(p) { p.classList.remove('active'); });
+          $pillAll.classList.add('active');
+          applyFilters();
+        }}, 'Clear filters')
+      ));
+    }
+
     saveState();
     state.focusedIdx = -1;
     clearFocus();
@@ -1027,7 +1056,12 @@
   }
 
   function load() {
-    state.entries = (window.ACTIVITY_DATA || []).map(fixProject);
+    var raw = (window.ACTIVITY_DATA || []).map(fixProject);
+    var first = raw.length > 0 ? raw[0] : {};
+    var digest = raw.length + ':' + (first.ts || '') + ':' + (first.response === null ? 'ip' : 'done');
+    if (digest === state.lastDigest) return;
+    state.lastDigest = digest;
+    state.entries = raw;
     render();
   }
 
@@ -1038,6 +1072,7 @@
     s.id = 'activity-script';
     s.src = 'activity.js?' + Date.now();
     s.onload = load;
+    s.onerror = function() { console.warn('[claude-activity] Failed to load activity.js'); };
     document.head.appendChild(s);
   }
 
@@ -1048,9 +1083,13 @@
   // Theme picker
   $themeBtn.addEventListener('click', function(e) {
     e.stopPropagation();
-    $themeMenu.classList.toggle('show');
+    var open = $themeMenu.classList.toggle('show');
+    $themeBtn.setAttribute('aria-expanded', open);
   });
-  document.addEventListener('click', function() { $themeMenu.classList.remove('show'); });
+  document.addEventListener('click', function() {
+    $themeMenu.classList.remove('show');
+    $themeBtn.setAttribute('aria-expanded', 'false');
+  });
   document.querySelectorAll('.theme-option').forEach(function(opt) {
     opt.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -1088,7 +1127,7 @@
         btn.classList.add('copied'); btn.textContent = 'copied!';
         showToast('Copied: ' + cmd);
         setTimeout(function() { btn.classList.remove('copied'); btn.textContent = 'resume'; }, 2000);
-      });
+      }).catch(function() { showToast('Copy failed \u2014 use manual select'); });
       return;
     }
     var row = e.target.closest('.entry, .lt-entry');
