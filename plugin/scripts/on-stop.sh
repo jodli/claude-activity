@@ -85,17 +85,14 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
     LAST_TS=$(echo "$TURN_DATA" | jq -r '.[-1].timestamp // empty' 2>/dev/null)
 
     if [ -n "$FIRST_TS" ] && [ -n "$LAST_TS" ]; then
-      if date -d "2000-01-01" +%s >/dev/null 2>&1; then
-        FIRST_EPOCH=$(date -d "$FIRST_TS" +%s 2>/dev/null)
-        LAST_EPOCH=$(date -d "$LAST_TS" +%s 2>/dev/null)
-      else
-        FIRST_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${FIRST_TS%%.*}" +%s 2>/dev/null)
-        LAST_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${LAST_TS%%.*}" +%s 2>/dev/null)
-      fi
+      FIRST_EPOCH=$(ts_to_epoch "$FIRST_TS")
+      LAST_EPOCH=$(ts_to_epoch "$LAST_TS")
 
       if [ -n "$FIRST_EPOCH" ] && [ -n "$LAST_EPOCH" ]; then
         DURATION_S=$((LAST_EPOCH - FIRST_EPOCH))
         [ "$DURATION_S" -lt 0 ] && DURATION_S=0
+      else
+        log_hook "WARN: could not parse timestamps for duration"
       fi
     fi
   fi

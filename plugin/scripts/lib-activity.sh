@@ -37,7 +37,7 @@ validate_jq() {
     return 1
   fi
   local jq_ver
-  jq_ver=$(jq --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1)
+  jq_ver=$(jq --version 2>/dev/null | sed 's/[^0-9.]//g')
   if [ -z "$jq_ver" ]; then
     log_hook "WARN: could not determine jq version"
     return 0
@@ -52,15 +52,42 @@ validate_jq() {
   return 0
 }
 
+# --- Portable timestamp conversion ---
+
+ts_to_epoch() {
+  local ts="$1"
+  [ -z "$ts" ] && return 1
+  # Try GNU date first, then BSD date
+  if date -d "2000-01-01" +%s >/dev/null 2>&1; then
+    date -d "$ts" +%s 2>/dev/null
+  else
+    date -j -f "%Y-%m-%dT%H:%M:%S" "${ts%%.*}" +%s 2>/dev/null
+  fi
+}
+
 # --- Portable mkdir-based locking ---
+
+LOCK_MAX_AGE=60
 
 acquire_lock() {
   local deadline=$(($(date +%s) + LOCK_TIMEOUT))
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    # Stale lock: process dead
     if [ -f "$LOCK_PID" ]; then
       local old_pid
       old_pid=$(cat "$LOCK_PID" 2>/dev/null)
       if [ -n "$old_pid" ] && ! kill -0 "$old_pid" 2>/dev/null; then
+        log_hook "WARN: removing stale lock (dead pid $old_pid)"
+        rm -rf "$LOCK_DIR"
+        continue
+      fi
+    fi
+    # Stale lock: older than LOCK_MAX_AGE (handles PID recycling after reboot)
+    if [ -d "$LOCK_DIR" ]; then
+      local lock_age
+      lock_age=$(find "$LOCK_DIR" -maxdepth 0 -mmin +1 2>/dev/null)
+      if [ -n "$lock_age" ]; then
+        log_hook "WARN: removing stale lock (older than ${LOCK_MAX_AGE}s)"
         rm -rf "$LOCK_DIR"
         continue
       fi
@@ -143,8 +170,13 @@ maybe_migrate_v04() {
 # --- Dashboard copy ---
 
 copy_dashboard() {
-  if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dashboard.html" ]; then
-    cp -u "$CLAUDE_PLUGIN_ROOT/dashboard.html" "$DATA_DIR/dashboard.html" 2>/dev/null
+  local src="$CLAUDE_PLUGIN_ROOT/dashboard.html"
+  local dst="$DATA_DIR/dashboard.html"
+  if [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "$src" ]; then
+    # Portable cp -u: only copy if source is newer (or dest missing)
+    if [ ! -f "$dst" ] || [ "$src" -nt "$dst" ]; then
+      cp "$src" "$dst" 2>/dev/null
+    fi
   fi
 }
 
