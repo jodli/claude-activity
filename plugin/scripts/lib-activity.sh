@@ -29,6 +29,29 @@ log_hook() {
   fi
 }
 
+# --- jq validation ---
+
+validate_jq() {
+  if ! command -v jq >/dev/null 2>&1; then
+    log_hook "FATAL: jq not found in PATH"
+    return 1
+  fi
+  local jq_ver
+  jq_ver=$(jq --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1)
+  if [ -z "$jq_ver" ]; then
+    log_hook "WARN: could not determine jq version"
+    return 0
+  fi
+  local major minor
+  major="${jq_ver%%.*}"
+  minor="${jq_ver#*.}"
+  if [ "${major:-0}" -lt 1 ] || { [ "${major:-0}" -eq 1 ] && [ "${minor:-0}" -lt 6 ]; }; then
+    log_hook "FATAL: jq $jq_ver is below minimum 1.6"
+    return 1
+  fi
+  return 0
+}
+
 # --- Portable mkdir-based locking ---
 
 acquire_lock() {
@@ -62,14 +85,32 @@ read_activity_json() {
     echo '[]'
     return
   fi
-  sed '1s/^window\.ACTIVITY_DATA = //' "$ACTIVITY_JS" | sed '$s/;$//'
+  local raw
+  raw=$(sed '1s/^window\.ACTIVITY_DATA = //' "$ACTIVITY_JS" | sed '$s/;$//')
+  # Validate it's a JSON array; recover if corrupted
+  if echo "$raw" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    echo "$raw"
+  else
+    log_hook "WARN: activity.js corrupted, recovering to []"
+    echo '[]'
+  fi
 }
 
 write_activity_js() {
   local tmp="$ACTIVITY_JS.tmp.$$"
   local json
   json=$(cat)
+  # Validate: never write empty or non-array data
+  if [ -z "$json" ] || ! echo "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    log_hook "ERROR: refusing to write invalid data to activity.js"
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
   printf 'window.ACTIVITY_DATA = %s;\n' "$json" > "$tmp" && mv "$tmp" "$ACTIVITY_JS"
+}
+
+cleanup_stale_tmp() {
+  find "$DATA_DIR" -maxdepth 1 -name "activity.js.tmp.*" -mmin +1 -delete 2>/dev/null
 }
 
 # --- One-time v0.4 migration ---

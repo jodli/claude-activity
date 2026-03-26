@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib-activity.sh"
 FILTERS_DIR="$SCRIPT_DIR/filters"
 
+validate_jq || exit 0
+
 INPUT=$(cat)
 
 # Guard against infinite loops — MUST be first check
@@ -101,7 +103,10 @@ fi
 
 # --- Update activity.js in background ---
 {
-  acquire_lock || exit 0
+  if ! acquire_lock; then
+    log_hook "WARN: lock timeout in on-stop.sh"
+    exit 0
+  fi
 
   DATA=$(read_activity_json)
 

@@ -5,6 +5,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib-activity.sh"
 
+validate_jq || exit 0
+
 INPUT=$(cat)
 
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
@@ -59,9 +61,19 @@ NEW_ENTRY=$(jq -n -c \
     session_file: (if $session_file == "" then null else $session_file end)
   }')
 
+if [ -z "$NEW_ENTRY" ]; then
+  log_hook "ERROR: jq failed to build entry for session=$SESSION_ID"
+  exit 0
+fi
+
 # Write to activity.js in background (don't block Claude)
 {
-  acquire_lock || exit 0
+  if ! acquire_lock; then
+    log_hook "WARN: lock timeout in on-prompt.sh"
+    exit 0
+  fi
+
+  cleanup_stale_tmp
 
   maybe_migrate_v04
 
